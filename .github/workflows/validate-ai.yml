@@ -77,9 +77,11 @@ jobs:
             done
           done
 
-          # Provider spoza łańcucha (np. Gemini) ma prawo być wyłączony, ale nie
+          # Provider odstawiony na bok ma prawo mieć status 'wyłączony', ale nie
           # ma prawa udawać aktywnego — status 'aktywny' poza łańcuchem znaczy,
-          # że ktoś zapomniał go dopisać do łańcucha albo przełączyć.
+          # że ktoś zapomniał go dopisać do łańcucha albo przełączyć. Dziś każdy
+          # wpis jest aktywny i w łańcuchu, więc ta reguła pilnuje przyszłych
+          # dopisań, a nie stanu obecnego.
           osierocone=$(jq -r '
             ([.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas]
              | flatten

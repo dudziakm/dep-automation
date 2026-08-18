@@ -80,28 +80,6 @@
       },
       "darmowy_tier": false,
       "zrodlo_cennika": "https://platform.kimi.ai/docs/pricing/chat-k27-code"
-    },
-    "gemini-flash": {
-      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "model": "gemini-3.6-flash",
-      "secret": "GEMINI_API_KEY",
-      "status": "wyłączony",
-      "rola": "przewidziany",
-      "notatka": "Opisany i gotowy, ale nieaktywny — brak klucza Google i decyzja o niewchodzeniu na płatny tier Gemini. Włączenie: ustaw GEMINI_API_KEY, zmień status na 'aktywny' i wpisz 'gemini-flash' w lancuch.domyslny. Endpoint potwierdzony co do hosta i ścieżki, samo wywołanie modelu NIE potwierdzone.",
-      "cennik_usd_za_1M": { "input": 1.5, "output": 7.5 },
-      "darmowy_tier": true,
-      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
-    },
-    "gemini-pro": {
-      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "model": "gemini-3.1-pro-preview",
-      "secret": "GEMINI_API_KEY",
-      "status": "wyłączony",
-      "rola": "przewidziany",
-      "notatka": "Jak gemini-flash, tylko mocniejszy i bez darmowego tieru (Pro zdjęte z Free 01.04.2026). Sensowny wyłącznie jako eskalacja po włączeniu gemini-flash.",
-      "cennik_usd_za_1M": { "input": 2.0, "output": 12.0, "powyzej_200k_input": 4.0, "powyzej_200k_output": 18.0 },
-      "darmowy_tier": false,
-      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
     }
   }
 }

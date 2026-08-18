@@ -89,8 +89,10 @@ AI_PROVIDERS_CONFIG=/sciezka/do/wlasnego-providers.json ai/scripts/ai-call.sh ..
 | eskalacja | `deepseek-pro` | `deepseek-v4-pro` | trudniejszy przypadek, albo gdy Flash zawiódł |
 | zapas | `openrouter` | `google/gemini-3.7-flash` | DeepSeek niedostępny: 401, 429, 5xx, awaria dostawcy |
 | zapas | `kimi` | `kimi-k2.7-code` | OpenRouter też nie odpowiedział — trzeci niezależny dostawca |
-| przewidziany, **wyłączony** | `gemini-flash` | `gemini-3.6-flash` | dopiero gdy pojawi się `GEMINI_API_KEY` |
-| przewidziany, **wyłączony** | `gemini-pro` | `gemini-3.1-pro-preview` | jak wyżej, jako eskalacja po włączeniu Gemini |
+
+To jest **cała** lista: cztery wpisy, wszystkie aktywne, wszystkie w łańcuchu.
+Nie ma tu providerów „przewidzianych na przyszłość" ani wyłączonych — wpis albo
+działa i jest używany, albo go nie ma.
 
 Rola w `lancuch` przyjmuje nazwę providera **albo listę nazw** próbowanych po
 kolei — `"zapas": ["openrouter", "kimi"]`. Dopisanie kolejnego zapasu jest przez
@@ -132,6 +134,13 @@ Dlatego eskalacja to `deepseek-pro`, a nie OpenRouter. Trzy powody:
 3. **OpenRouter ma inną robotę.** Jest odpowiedzią na pytanie „co, gdy DeepSeek
    nie odpowiada", a nie „co, gdy zadanie jest trudne". Awaria dostawcy i trudny
    przypadek to dwa różne problemy i nie powinny mieć jednego rozwiązania.
+
+Warto zauważyć, że para Flash → Pro jest w tej warstwie **jedyną** parą „ten sam
+dostawca, dwie moce" i nic tego nie zastąpi. Kimi nie nadaje się na eskalację
+(inny dostawca, inny klucz — patrz akapit o Kimi niżej), OpenRouter tym bardziej.
+Dlatego zasada z punktu 1 ma dokładnie jedno zastosowanie i jest nim ta para —
+gdyby kiedyś zniknęła, eskalacja przestałaby mieć sens jako osobna rola, a nie
+tylko zmieniłaby adresata.
 
 Gdyby okazało się, że Pro też nie daje rady, właściwym krokiem **nie** jest
 kolejny model, a człowiek. Patrz akapit o pętlach niżej.
@@ -298,33 +307,61 @@ DeepSeeka na tym samym pytaniu kontrolnym), nie jest tańszy i przy 3 zapytaniac
 na minutę nie nadaje się do niczego zbiorczego. Podniesienie limitów wymaga
 wyższego progu doładowania, nie zmiany w tym repo.
 
-### Rola Gemini — opisane, wyłączone, gotowe
+### Dlaczego nie ma Gemini jako providera
 
-`gemini-flash` i `gemini-pro` mają status `wyłączony` i **nie występują w
-łańcuchu**. To decyzja, nie przeoczenie: nie ma klucza Google, a płatny tier
-Gemini został na teraz odrzucony. Wpisy zostają, żeby włączenie było zmianą
-konfiguracji, a nie nową robotą:
+Gemini **nie jest** providerem tej warstwy i wpisy `gemini-flash` oraz
+`gemini-pro` zostały z konfiguracji usunięte razem z sekretem
+`GEMINI_API_KEY`. Powód jest finansowy, nie techniczny: dostępny klucz Google
+siedzi na **darmowym tierze**, a wejście na płatny to wydatek rzędu 40 zł, na
+który nie ma zgody.
+
+To nie jest domysł — darmowy tier został zmierzony tym kluczem i wynik jest
+jednoznaczny:
+
+| Model | Odpowiedź | Co to znaczy |
+|---|---|---|
+| `gemini-3.6-flash` | **HTTP 200** | Flash na darmowym tierze działa |
+| `gemini-3.1-pro-preview` | **HTTP 429**, metryki z sufiksem `-FreeTier` i `limit: 0` | Pro ma na tym koncie **zerowy przydział** — nie „mały", tylko żaden |
+
+Czyli darmowy tier dawał **połowę** tego, czego warstwa potrzebuje: model
+podstawowy owszem, ale mocniejszy wariant do eskalacji miał limit zero.
+Provider, którego eskalacja nie może się nigdy wykonać, jest gorszy niż jego
+brak, bo wygląda na dostępny i wywraca się dopiero w locie. Zgadza się to z
+cennikiem Google: modele Pro zostały zdjęte z darmowego tieru 01.04.2026.
+
+Jest jeszcze drugi powód, żeby nie ratować się tu darmowym tierem, i on nie
+zniknąłby nawet przy limicie większym od zera: **treść wysłana na darmowy tier
+jest używana do ulepszania produktów Google**, czego cennik nie ukrywa. Agent tej
+warstwy czyta logi buildów z prywatnych repozytoriów, więc darmowy tier był dla
+niego złym pomysłem niezależnie od limitów.
+
+**Gdyby ta decyzja się kiedyś zmieniła**, wraca się tu w trzech krokach —
+i zaczyna od doładowania, bo bez niego Pro dalej będzie zwracać 429:
 
 ```bash
-# 1. Dodaj sekret (nigdy do pliku w repo):
+# 1. Płatny tier w Google AI Studio (bez tego gemini-3.1-pro-preview ma limit 0).
+# 2. Sekret — nigdy do pliku w repo:
 gh secret set GEMINI_API_KEY --repo dudziakm/dep-automation
-
-# 2. W ai/providers.json: status "wyłączony" -> "aktywny" przy gemini-flash
-#    i wpisz "gemini-flash" w .lancuch.domyslny (albo w .lancuch.zapas).
+# 3. Wpis w ai/providers.json z base_url https://generativelanguage.googleapis.com/v1beta/openai
+#    i dopisanie nazwy do .lancuch — CI pilnuje, żeby jedno bez drugiego nie przeszło.
 ```
 
-Uwaga na kolejność: CI pilnuje, żeby provider ze statusem `aktywny` **był** w
-łańcuchu, a provider z łańcucha **był** aktywny. Zmiana samego statusu bez
-dopisania do łańcucha (albo odwrotnie) zapali `validate ai layer` na czerwono —
-celowo, bo to zawsze znaczy, że ktoś zrobił połowę roboty.
+Ceny z ostatniego sprawdzenia, dla orientacji przy tej decyzji: `gemini-3.6-flash`
+to 1,50 / 7,50 USD za milion tokenów wejścia i wyjścia, `gemini-3.1-pro-preview`
+2,00 / 12,00 (i 4,00 / 18,00 powyżej 200 tys. tokenów wejścia) —
+[cennik Gemini API](https://ai.google.dev/gemini-api/docs/pricing). Dla
+porównania domyślny `deepseek-v4-flash` kosztuje 0,22 / 0,66 poza szczytem, więc
+sam Gemini Flash jest od niego **około siedmiokrotnie droższy na wejściu i ponad
+jedenastokrotnie na wyjściu**. Rezygnacja z Gemini nie jest więc wyłącznie
+oszczędnością 40 zł na starcie.
 
-`ai-call.sh` pozwala użyć wyłączonego providera jawnie, ale wtedy głośno o tym
-mówi:
+Uwaga, gdyby wpis kiedyś wracał: CI pilnuje, żeby provider ze statusem `aktywny`
+**był** w łańcuchu, a provider z łańcucha **był** aktywny. Zrobienie połowy roboty
+zapali `validate ai layer` na czerwono — celowo.
 
-```
-$ ai/scripts/ai-call.sh -p gemini-flash
-UWAGA: provider 'gemini-flash' ma w konfiguracji status 'wyłączony'. Uzywam go, bo zazadano go jawnie przez --provider.
-```
+Modele Gemini nadal biorą udział w tej warstwie, ale **wyłącznie przez
+OpenRoutera** (`google/gemini-3.7-flash` jako pierwszy zapas). To inna droga,
+inny klucz i inny rachunek — nie wymaga konta Google ani płatnego tieru Gemini.
 
 ## Sekrety
 
@@ -336,7 +373,9 @@ do repo.
 | `DEEPSEEK_API_KEY` | `deepseek`, `deepseek-pro` | [platform.deepseek.com](https://platform.deepseek.com/) | tak — to domyślna ścieżka i eskalacja |
 | `OPENROUTER_API_KEY` | `openrouter` | [openrouter.ai/keys](https://openrouter.ai/keys) | zalecany — pierwszy zapas na awarię DeepSeeka |
 | `KIMI_API_KEY` | `kimi` | [platform.moonshot.ai](https://platform.moonshot.ai/) | opcjonalny — drugi zapas; bez niego łańcuch po prostu kończy się na OpenRouterze |
-| `GEMINI_API_KEY` | `gemini-flash`, `gemini-pro` | [Google AI Studio](https://aistudio.google.com/apikey) | nie — Gemini jest wyłączone |
+
+Trzy sekrety, trzech dostawców, koniec listy. `GEMINI_API_KEY` **został usunięty**
+z sekretów repozytorium razem z wpisami Gemini — powód wyżej.
 
 Jeden klucz DeepSeeka obsługuje i domyślnego providera, i eskalację: `deepseek` i
 `deepseek-pro` mają ten sam `base_url` i ten sam sekret. To wygoda, ale i słabość:
@@ -346,13 +385,6 @@ i Kimi — mają **własne klucze u własnych dostawców**.
 Klucz Kimi działa wyłącznie na hoście globalnym `api.moonshot.ai`. Ten sam klucz
 na `api.moonshot.cn` dostaje HTTP 401, więc chińskiego hosta w konfiguracji nie
 ma i nie powinno być.
-
-Jeśli kiedyś włączysz Gemini: klucze generowane w AI Studio są domyślnie
-ograniczone do Gemini API, ale klucz z Google Cloud Console trzeba ograniczyć
-ręcznie do `generativelanguage.googleapis.com` — od 19.06.2026 Gemini API odrzuca
-nieograniczone klucze. *(Źródło: komunikat na forum Google AI Developers,
-powtarzany w wielu wątkach; nie znalazłem go na stronie dokumentacji, więc
-traktuj jako niepotwierdzone oficjalnym dokumentem.)*
 
 ## Gdzie mieszkają sekrety na koncie osobistym
 
@@ -578,15 +610,18 @@ warstwy mapują się na niego tak:
 | Provider tutaj | Ścieżka w gh-aw | Uwagi |
 |---|---|---|
 | `deepseek`, `deepseek-pro`, `openrouter`, `kimi` | **brak wbudowanego silnika** | trasa obejściowa: `engine: copilot` w trybie BYOK, przez `COPILOT_PROVIDER_BASE_URL`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_MODEL` i `COPILOT_PROVIDER_TYPE: openai` — czyli dokładnie te same trzy wartości co tutaj. Dla Kimi dochodzi czwarta sprawa: `temperature` musi zostać `1`, a tego ta trasa nie wystawia jako osobnego pola — **niesprawdzone**, czy da się je tam narzucić |
-| `gemini-flash`, `gemini-pro` | `engine: gemini` + sekret `GEMINI_API_KEY` | wbudowany silnik; alternatywnie bezkluczowe Google Workload Identity Federation (`engine.auth`), które przełącza silnik na backend Vertex AI |
 
 Wbudowane silniki gh-aw to `copilot`, `claude`, `codex`, `gemini` i `pi`.
-DeepSeeka nie ma na tej liście, więc **domyślny provider tej warstwy wymaga w
-gh-aw trasy BYOK**, a nie wbudowanego silnika. To znany koszt decyzji o
-DeepSeeku, nie niespodzianka — i akurat ten koszt jest niski, bo BYOK przyjmuje
-te same trzy wartości (`base_url`, klucz, model), które i tak trzymamy w
-`providers.json`. Dla samego silnika `gemini` własny endpoint ustawia się zmienną
-`GEMINI_API_BASE_URL` w `engine.env`.
+**Żaden z czterech providerów tej warstwy nie jest na tej liście**, więc cała
+warstwa wymaga w gh-aw trasy BYOK, a nie wbudowanego silnika. To znany koszt
+podjętych decyzji, nie niespodzianka — i akurat niski, bo BYOK przyjmuje te same
+trzy wartości (`base_url`, klucz, model), które i tak trzymamy w
+`providers.json`.
+
+Jedyny silnik wbudowany, po który ta warstwa mogłaby sięgnąć wprost, to `gemini`
+— i właśnie z niego zrezygnowaliśmy z powodów opisanych wyżej. Warto to wiedzieć,
+bo przy wdrażaniu gh-aw łatwo uznać wbudowany silnik za drogę na skróty; tutaj
+byłaby to droga przez płatny tier Gemini.
 
 Mechanizmy bezpieczeństwa, na które gh-aw liczy (i które są powodem, dla którego
 plan go wybrał): job agenta jest domyślnie **read-only i w sandboksie**, ruch
@@ -624,8 +659,10 @@ Stan na 18.08.2026. Ceny za milion tokenów, w USD.
 | **eskalacja** | DeepSeek | `deepseek-v4-pro` | 0,66 / 1,32 | 1,98 / 3,96 | nie | [api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing/) |
 | **zapas** | OpenRouter | `google/gemini-3.7-flash` | 0,375 | 1,875 | nie | [openrouter.ai/api/v1/models](https://openrouter.ai/api/v1/models) |
 | **zapas** | Kimi (Moonshot) | `kimi-k2.7-code` | 0,95 (0,19 cache hit) | 4,00 | nie | [platform.kimi.ai/docs/pricing/chat-k27-code](https://platform.kimi.ai/docs/pricing/chat-k27-code) |
-| wyłączony | Gemini | `gemini-3.6-flash` | 1,50 | 7,50 | tak | [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) |
-| wyłączony | Gemini | `gemini-3.1-pro-preview` | 2,00 (4,00 >200k) | 12,00 (18,00 >200k) | **nie** | [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) |
+
+Cztery wiersze, cztery aktywne wpisy — tabela pokrywa się jeden do jednego z
+`providers.json`. Żaden wiersz nie opisuje modelu, którego warstwa nie potrafi
+dziś wywołać.
 
 DeepSeek podaje dwie ceny, bo ma taryfę godzinową: pierwsza to poza szczytem,
 druga w szczycie. Szczyt to 01:00–04:00 i 06:00–10:00 UTC. Trafienie w cache
@@ -633,10 +670,11 @@ wejściowy jest u niego skrajnie tanie (`$0,007`–`$0,014` za milion dla Flasha
 `$0,022`–`$0,044` dla Pro), co dla agenta czytającego wielokrotnie ten sam log
 builda ma znaczenie.
 
-Zestawienie kosztów, które uzasadnia wybór: domyślny model tej warstwy jest
+Zestawienie kosztów, które uzasadnia wybór: domyślny `deepseek-v4-flash` jest
 **około siedmiokrotnie tańszy na wejściu i ponad jedenastokrotnie na wyjściu** od
-`gemini-3.6-flash`, który był domyślny w poprzedniej wersji. Cały łańcuch —
-Flash, Pro i zapas — mieści się poniżej ceny samego Gemini Flasha.
+`gemini-3.6-flash`, który był domyślnym providerem w pierwszej wersji tej
+warstwy. Ta różnica zdecydowała o przejściu na DeepSeeka i jest osobnym powodem —
+obok kosztu doładowania — dla którego Gemini tu nie wróciło.
 
 Ceny DeepSeeka i OpenRoutera pobrałem ze źródeł nadających się do sprawdzenia
 maszynowo: tabela DeepSeeka ze strony cennika, cena OpenRoutera wprost z
@@ -651,28 +689,12 @@ Kosztuje 4,3× więcej na wejściu i 6× więcej na wyjściu niż domyślny Flas
 się tu nie za cenę, tylko za niezależność od dwóch pozostałych dostawców — i
 płaci się dopiero wtedy, gdy oba zawiodą, bo Kimi jest ostatnim ogniwem łańcucha.
 
-### Dwie rzeczy, które warto wiedzieć o wersjach Gemini
-
-**`gemini-3.7-flash` istnieje, ale nie wybrałem go jako domyślnego.** Widnieje w
-cenniku Gemini Enterprise Agent Platform (Google Cloud) z ceną wprowadzającą
-`$0,75 / $3,75` do 31.12.2026 i jest dostępny przez OpenRouter — sprawdziłem, że
-odpowiada. Natomiast **na stronie cennika Gemini Developer API go nie ma**;
-najnowszy Flash tam udokumentowany to `gemini-3.6-flash`. Skoro warstwa celuje w
-Developer API (`generativelanguage.googleapis.com`), domyślnym jest ten, który
-jest tam opisany. Gdy 3.7 pojawi się w cenniku Developer API, przełączenie to
-zmiana jednego pola `model`.
-
-**Darmowy tier obejmuje Flash, nie Pro.** Modele Pro zostały zdjęte z Free
-01.04.2026. Free ma też niższe limity (rzędu kilku–kilkunastu zapytań na minutę)
-i — istotne — **treść z darmowego tieru jest używana do ulepszania produktów
-Google**, czego cennik nie ukrywa. Dla agenta czytającego logi buildów z
-prywatnych repo to argument za płatnym tierem, nie za darmowym.
-
 ## Co zostało potwierdzone empirycznie, a co nie
 
-Testy wykonane 18.08.2026 na tym skrypcie i tej konfiguracji. Klucze
-`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` i `KIMI_API_KEY` były dostępne w
-środowisku, klucza Gemini **nie było**.
+Testy wykonane 18.08.2026 na tym skrypcie i tej konfiguracji. Wszystkie trzy
+klucze warstwy — `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` i `KIMI_API_KEY` — były
+dostępne w środowisku. Klucz Gemini był dostępny tylko na czas pomiaru darmowego
+tieru, po którym Gemini zostało z warstwy usunięte.
 
 ### Potwierdzone uruchomieniem
 
@@ -689,11 +711,11 @@ Cały łańcuch po zmianie na DeepSeeka został przejechany na żywo:
 | Brak trzeciego, mocniejszego modelu DeepSeeka | próba `deepseek-v4`, `deepseek-v4-pro-thinking` → HTTP 400 z komunikatem dostawcy wymieniającym wyłącznie tę dwójkę |
 | Stare aliasy `deepseek-chat` i `deepseek-reasoner` | nadal przyjmowane, ale **oba mapują się na `deepseek-v4-flash`** (widać w polu `model` odpowiedzi) — dlatego w konfiguracji są nazwy kanoniczne |
 | OpenRouter `https://openrouter.ai/api/v1/chat/completions` | HTTP 200, poprawna treść, model `google/gemini-3.7-flash` |
-| Zgodność wszystkich trzech aktywnych wpisów z formatem OpenAI | tak — ten sam kod bez ani jednej gałęzi per provider |
+| Zgodność wszystkich czterech aktywnych wpisów z formatem OpenAI | tak — ten sam kod bez ani jednej gałęzi per provider |
 | Przełączenie providera bez zmiany kodu | tak, trzema drogami: flagą `-p`, zmienną `AI_PROVIDERS_CONFIG`, edycją `.lancuch.domyslny` |
 | Klucz nie pojawia się w `ps -Ao args` | potwierdzone w trakcie żywego wywołania |
 | Klucz nie pojawia się w komunikacie błędu | podstawiony fałszywy klucz: **0 wystąpień** w całym wyjściu, mimo dwóch komunikatów o błędzie autoryzacji |
-| Endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` istnieje i odpowiada | tak — z nieprawidłowym kluczem zwraca HTTP 400 „Please pass a valid API key", czyli host i ścieżka są poprawne |
+| **Darmowy tier Gemini nie wystarcza tej warstwie** | kluczem z darmowego tieru: `gemini-3.6-flash` → HTTP 200, ale `gemini-3.1-pro-preview` → HTTP 429 z metrykami `-FreeTier` i `limit: 0`. Model do eskalacji miał **zerowy** przydział, więc Gemini zostało usunięte zamiast zostawione jako wyłączone |
 | Kody wyjścia 1, 3 i 4 | wywołane celowo i zgodne z dokumentacją powyżej |
 | Tokeny myślenia zjadają `max_tokens` | zmierzone na obu modelach DeepSeeka i na Gemini przez OpenRouter — tabela wyżej |
 | Nowe reguły w `validate-ai.yml` łapią regresję | test kontrolny na trzech celowo zepsutych konfiguracjach (domyślny na wyłączonego, aktywny poza łańcuchem, literówka w nazwie) — każda dała czerwień, stan faktyczny zielono |
@@ -709,9 +731,10 @@ Cały łańcuch po zmianie na DeepSeeka został przejechany na żywo:
 | Zejście po łańcuchu aż do Kimi | podstawione zepsute `DEEPSEEK_API_KEY` i `OPENROUTER_API_KEY`: trzy pierwsze wpisy odpadły na HTTP 401, `kimi` odpowiedział poprawnie, `exit 0` |
 | Klucz Kimi nie pojawia się w komunikacie błędu | podstawiony fałszywy klucz: HTTP 401 „Invalid Authentication", **0 wystąpień** klucza w stdout i stderr, `exit 4` |
 | Skaner wycieków w CI obejmuje format klucza Kimi | klucz pasuje do istniejącego wzorca `sk-[0-9a-zA-Z]{20,}`, więc reguła nie wymagała ani rozszerzania, ani osłabiania |
-| Reguły `validate-ai.yml` po zmianie łapią regresję — dziewięć przypadków | krok walidacyjny wyjęty wprost z workflow i puszczony na dziewięciu wariantach: stan faktyczny **zielono**, a osobno czerwień dla: Kimi wyłączony ale w łańcuchu, Kimi aktywny ale poza łańcuchem, literówka na liście zapasów, brak `base_url`, `temperature` jako napis, `max_tokens` jako napis, nazwa providera ze spacją, domyślny przestawiony na wyłączone Gemini |
+| Reguły `validate-ai.yml` łapią regresję — czternaście przypadków | krok walidacyjny wyjęty wprost z workflow i puszczony na czternastu wariantach konfiguracji. **Dwa miały przejść i przeszły**: stan faktyczny oraz nowy provider wyłączony i trzymany poza łańcuchem (to jest dozwolone). **Dwanaście miało zapalić czerwień i zapaliło**: Kimi wyłączony ale w łańcuchu, Kimi aktywny ale poza łańcuchem, usunięta cała rola `zapas` przy aktywnym OpenRouterze, literówka `kimmi` na liście, `lancuch.domyslny` i `lancuch.eskalacja` wskazujące na **usunięte** wpisy Gemini, brak `base_url`, `temperature` jako napis, `max_tokens` jako napis, nazwa providera ze spacją, provider wyłączony wpisany do łańcucha, provider aktywny poza łańcuchem |
+| Reguły nie strzelają za szeroko | dwa przypadki zielone wyżej są tu istotniejsze od dwunastu czerwonych: gdyby reguła „aktywny musi być w łańcuchu" była napisana zbyt agresywnie, wywracałaby się na legalnym wyłączonym wpisie. Nie wywraca się |
+| Usunięcie Gemini jest **kompletne** | `lancuch.domyslny = "gemini-flash"` i `lancuch.eskalacja = "gemini-pro"` dają teraz „wskazuje na nieistniejacego providera", a nie „ma status wyłączony" — czyli wpisów naprawdę nie ma w konfiguracji, a nie tylko są odstawione |
 | Test kontrolny wykrył **realny błąd w nowej regule** | pierwsza wersja sprawdzenia „aktywny poza łańcuchem" miała błąd zasięgu w jq (`index(.key)` odnosiło `.key` do tablicy łańcucha, nie do wpisu providera) i wywracała się na **poprawnej** konfiguracji. Bez kontroli pozytywnej wszystkie pozostałe przypadki świeciłyby się na czerwono z niewłaściwego powodu |
-| To samo **w prawdziwym CI**, nie tylko lokalnie | gałąź tymczasowa z domyślnym providerem wskazującym na wyłączone Gemini: przebieg `validate ai layer` zakończył się porażką z adnotacją „lancuch.domyslny wskazuje na 'gemini-flash', ktory ma status 'wyłączony' zamiast 'aktywny'". Gałąź usunięta po teście. |
 | Reguły dla **list** w łańcuchu też działają w prawdziwym CI | dwa przebiegi na gałęzi tymczasowej, oba czerwone z właściwą adnotacją: literówka `"kimmi"` na liście zapasów → „lancuch.zapas wskazuje na nieistniejacego providera 'kimmi'", a Kimi aktywny po wyjęciu z listy → „providerzy ze statusem 'aktywny' poza lancuchem: kimi". To druga z tych reguł miała wcześniej błąd w jq, więc akurat jej nie chciałem zostawiać sprawdzonej wyłącznie lokalnie. Gałąź usunięta po teście. |
 | Brak sekretów Actions na poziomie konta osobistego | `GET /user/actions/secrets` → **404** (endpoint nie istnieje), `GET /user/codespaces/secrets` → **403** (istnieje, brak zakresu). Konto `dudziakm`: `type=User`, `GET /user/orgs` → pusta lista |
 | `reasoning_effort: "none"` / wyłączenie myślenia dla Gemini 3 | **nie działa** — OpenRouter odpowiada HTTP 400 „Reasoning is mandatory for this endpoint and cannot be disabled", co zgadza się z dokumentacją Google |
@@ -720,9 +743,6 @@ Cały łańcuch po zmianie na DeepSeeka został przejechany na żywo:
 
 | Co | Dlaczego nie |
 |---|---|
-| Wywołanie `gemini-3.6-flash` **wprost** przez Gemini Developer API | **brak `GEMINI_API_KEY`.** Endpoint potwierdzony, sam model nie. Gemini pozostaje w konfiguracji jako wyłączone właśnie dlatego. |
-| Wywołanie `gemini-3.1-pro-preview` wprost przez Gemini Developer API | to samo — brak klucza |
-| Poprawność identyfikatorów modeli Gemini u samego Google | potwierdzone **pośrednio**: oba modele odpowiedziały przez OpenRouter (`google/gemini-3.6-flash`, `google/gemini-3.1-pro-preview`), a `gemini-3.6-flash` figuruje dosłownie w przykładzie `curl` w dokumentacji Google. Bezpośrednio nie da się — `ListModels` bez klucza zwraca HTTP 403. |
 | Czy `deepseek-v4-pro` realnie **lepiej naprawia buildy** niż Flash | potwierdziłem, że istnieje, odpowiada i jest inaczej wyceniony oraz inaczej limitowany. Że daje lepsze naprawy — nie; do tego trzeba serii prawdziwych padniętych buildów, a nie jednego pytania kontrolnego. |
 | Czy `kimi-k2.7-code` **realnie lepiej naprawia buildy** niż `kimi-k2.6` albo `kimi-k3` | to samo zastrzeżenie. Zmierzyłem koszt, czas i to, że wszystkie trzy dały **poprawną** diagnozę jednego przypadku. Wybór opieram na cenie za odpowiedź, zużyciu tokenów i deklarowanej specjalizacji dostawcy — **nie** na przewadze jakościowej, bo jednego zadania do tego nie wystarczy. |
 | Czy `kimi-k2.5` i `-highspeed` są **trwale** gorsze, czy tylko trafiły na zły przebieg | `temperature` jest zablokowana na 1.0, więc wyniki są losowe, a każdy z nich puściłem na tym zadaniu **raz**. Puste odpowiedzi mogą być pechem, a nie własnością modelu. Do rozstrzygnięcia potrzeba serii, na którą limit 3 zapytań na minutę praktycznie nie pozwala. |
@@ -730,24 +750,24 @@ Cały łańcuch po zmianie na DeepSeeka został przejechany na żywo:
 | Zachowanie Kimi na **prawdziwym** padniętym buildzie z prawdziwego repo | testowałem na ręcznie złożonym logu `npm ci` (378 tokenów). Realne logi są dłuższe i brudniejsze; ani czasy, ani zużycie tokenów nie muszą się przenieść jeden do jednego. |
 | Czy trasa BYOK w `gh-aw` potrafi narzucić Kimi `temperature: 1` | mapowanie BYOK wystawia `base_url`, klucz i model. Nie znalazłem w dokumentacji pola na `temperature`, a samego `gh-aw` nie uruchamiałem — więc nie wiem, czy Kimi da się przez nie zawołać bez błędu HTTP 400. |
 | Czy limity Kimi da się podnieść dla tego konta | tabela progów mówi, że limit rośnie z sumą doładowań (Tier1 przy $10 to 200 RPM). Nie doładowywałem konta, więc opieram się wyłącznie na cenniku. |
-| Limity darmowego tieru Gemini w liczbach (RPM/RPD) | Google podaje je per projekt w AI Studio, a nie jako stałą tabelę w dokumentacji. Liczby krążące po blogach (5–15 RPM, do 1000 zapytań dziennie) pochodzą ze źródeł wtórnych i ich nie potwierdzam. |
 | Czy sekrety organizacyjne działają dla repo prywatnych na darmowym planie organizacji | brak konta organizacyjnego, na którym mógłbym to sprawdzić. Dokumentacja GitHuba nie wymienia ich wśród funkcji tylko-dla-Team, źródła wtórne twierdzą inaczej. |
 | Zachowanie szablonu workflow w GitHub Actions | nie uruchamiany — jest wyłączony i leży poza `.github/workflows/`. Sprawdzona wyłącznie poprawność składni YAML. |
 | Integracja z `gh-aw` | nieuruchamiana. Mapowanie w tabeli wyżej pochodzi z dokumentacji gh-aw, nie z działającego workflow. |
 | Zachowanie tokenu `DEP_AGENT_TOKEN` przy sięganiu do innych repo | żaden taki token nie został utworzony ani użyty. Zestaw uprawnień w sekcji o sekretach pochodzi z dokumentacji GitHuba i z listy uprawnień fine-grained PAT, nie z działającego przebiegu. |
 
-**Pierwsza rzecz do zrobienia po zdobyciu klucza Gemini** — dopiero wtedy Gemini
-przestaje być niepotwierdzone:
+**Pierwsza rzecz do zrobienia po dopisaniu jakiegokolwiek nowego providera** —
+dokładnie ta ścieżka wyłapała u Kimi blokadę `temperature`, zanim wpis trafił do
+łańcucha:
 
 ```bash
-export GEMINI_API_KEY=...   # nie wpisuj do żadnego pliku w repo
-ai/scripts/ai-call.sh --check -p gemini-flash
-echo 'Odpowiedz jednym slowem: OK' | ai/scripts/ai-call.sh -p gemini-flash
-echo 'Odpowiedz jednym slowem: OK' | ai/scripts/ai-call.sh -p gemini-pro
+export NOWY_API_KEY=...   # nie wpisuj do żadnego pliku w repo
+ai/scripts/ai-call.sh --check
+echo 'Odpowiedz jednym slowem: OK' | ai/scripts/ai-call.sh -p nowy
 ```
 
-Flaga `-p` używa wpisu mimo statusu `wyłączony` i mówi o tym w logu — czyli da się
-zweryfikować Gemini **bez** ruszania łańcucha. Jeśli któreś wywołanie zwróci HTTP
-404 albo błąd o nieznanym modelu, poprawną nazwę znajdziesz w cenniku Developer
-API i zmieniasz ją w `providers.json`. Dopiero gdy oba odpowiedzą, ma sens
-przełączanie statusu na `aktywny` i wpisywanie Gemini do łańcucha.
+Flaga `-p` pozwala sprawdzić wpis **bez** ruszania łańcucha, więc weryfikacja
+nowego providera nigdy nie musi przestawiać domyślnego. Jeśli wywołanie zwróci
+HTTP 400, przeczytaj komunikat dosłownie: u Kimi to właśnie tam wyszło, że
+`temperature: 0` jest odrzucane i że provider potrzebuje własnego bloku
+`parametry`. Dopiero gdy `-p` zwraca treść, ma sens dopisywanie nazwy do
+`.lancuch` — CI i tak nie przepuści połowicznej roboty w żadną stronę.

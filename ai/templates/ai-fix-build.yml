@@ -101,13 +101,12 @@ jobs:
           # Sekrety wchodzą tylko do tego kroku i tylko jako zmienne
           # środowiskowe. Skrypt czyta je przez printenv i nie przekazuje
           # dalej ani w argumentach, ani w logu.
-          # Łańcuch domyślny to deepseek -> deepseek-pro -> openrouter, więc te
-          # dwa sekrety wystarczają. GEMINI_API_KEY jest tu na przyszłość: przy
-          # wyłączonym Gemini pusta wartość nie szkodzi, bo skrypt pomija
-          # providera bez sekretu.
+          # Łańcuch to deepseek -> deepseek-pro -> openrouter -> kimi, czyli
+          # dokładnie te trzy sekrety. Brak któregokolwiek nie psuje przebiegu:
+          # skrypt pomija providera bez sekretu i schodzi do następnego.
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           PROVIDER: ${{ inputs.provider }}
           ESCALATE: ${{ inputs.escalate }}
         run: |
