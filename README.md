@@ -126,3 +126,17 @@ onboarding z gołym `config:recommended`, czyli bez tej polityki.
 2. Zainstaluj aplikację: https://github.com/apps/renovate
 3. Wybierz repozytoria z kolumny `preset` różnej od `skip`.
 4. Sprawdź Dependency Dashboard w kilku repo, zanim rozszerzysz zakres.
+
+## Dokumentacja i warstwa AI
+
+- [`docs/PLAN-AUTOMATYZACJI.md`](docs/PLAN-AUTOMATYZACJI.md) — pełny plan
+  wykonawczy: pomiary, korekty wcześniejszych wniosków, kolejność wdrożenia.
+- [`ai/`](ai/README.md) — warstwa providerów AI dla agenta z Fazy 7, który
+  próbuje naprawić build padnięty po podbiciu zależności. Gemini Flash domyślnie,
+  Gemini Pro na eskalację, DeepSeek jako zapas, OpenRouter przewidziany i
+  wyłączony. Przełączenie providera to zmiana trzech wartości w
+  `ai/providers.json`, bo wszyscy mówią protokołem zgodnym z OpenAI.
+
+Agent AI **nigdy nie jest bramką**: może wyłącznie zaproponować zmianę, a o tym,
+czy cokolwiek wjedzie na `main`, decydują deterministyczne checki CI i ocena
+statusu przez Renovate.

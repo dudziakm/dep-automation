@@ -1,0 +1,143 @@
+# SZABLON — NIEAKTYWNY.
+#
+# Ten plik leży w ai/templates/, a nie w .github/workflows/, więc GitHub go nie
+# widzi i nigdy sam nie uruchomi. Żadne repo nie dostaje go automatycznie.
+# Żeby go użyć, skopiuj go świadomie do .github/workflows/ w JEDNYM repo
+# pilotażowym i dopiero wtedy oceń, czy warto rozszerzać.
+#
+# Co robi: bierze log padniętego builda, prosi model o diagnozę i propozycję
+# poprawki, i oddaje wynik jako ARTEFAKT. Nic nie commituje, nic nie scala.
+#
+# Trzy założenia, których nie wolno rozluźnić:
+#   1. `permissions: contents: read` i nic więcej. Brak `pull-requests: write`,
+#      brak `contents: write`. Agent nie ma drogi do zapisu ani do merge'a.
+#   2. `persist-credentials: false` w checkoucie. Tą ścieżką (.git/config)
+#      badacze wyprowadzili token z workflowa Gemini CLI Google'a i uzyskali
+#      push na main.
+#   3. Wynik jest propozycją, nie wyrokiem. Bramką pozostaje deterministyczne CI
+#      plus ocena statusu przez Renovate. Model nie ustawia żadnego checka.
+
+name: ai — diagnoza padnietego builda (szablon, uruchamiany recznie)
+
+# Tylko ręcznie. Świadomie NIE ma tu `workflow_run`, `pull_request` ani
+# `schedule`: każdy z nich uruchamiałby agenta na treści, której nikt nie
+# przejrzał, a to jest wprost powierzchnia na prompt injection z changelogu.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID przebiegu workflow, ktorego log ma zostac przeanalizowany"
+        required: true
+        type: string
+      provider:
+        description: "Provider z ai/providers.json (puste = lancuch domyslny)"
+        required: false
+        default: ""
+        type: string
+      escalate:
+        description: "Zacznij od modelu eskalacyjnego (trudniejszy przypadek)"
+        required: false
+        default: false
+        type: boolean
+
+# Domyślnie nic. Uprawnienia nadaje wyłącznie job, i tylko do czytania.
+permissions: {}
+
+concurrency:
+  group: ai-diagnoza-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnoza:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read   # do checkoutu repo
+      actions: read    # do odczytu logu wskazanego przebiegu
+
+    steps:
+      - name: Checkout bez zostawiania tokenu w .git/config
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Pobierz warstwe providerow z repo sterujacego
+        uses: actions/checkout@v7
+        with:
+          repository: dudziakm/dep-automation
+          path: .dep-automation
+          persist-credentials: false
+
+      - name: Zbierz log padnietego przebiegu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          # Log bywa ogromny, a agentowi wystarcza ogon. Ograniczamy wejscie,
+          # zeby nie placic za 200 tys. tokenow konfiguracji runnera.
+          gh run view "$RUN_ID" --log-failed > /tmp/build.log 2>/dev/null \
+            || gh run view "$RUN_ID" --log > /tmp/build.log
+          tail -c 40000 /tmp/build.log > /tmp/build.tail.log
+          wc -c /tmp/build.tail.log
+
+      - name: Zloz prompt
+        run: |
+          set -euo pipefail
+          {
+            echo "Build w repozytorium ${GITHUB_REPOSITORY} padl po podbiciu zaleznosci."
+            echo "Ponizej ogon logu. Podaj: (1) najbardziej prawdopodobna przyczyne,"
+            echo "(2) minimalna zmiane w manifescie lub konfiguracji, ktora ja usuwa,"
+            echo "(3) czym mozna te zmiane zweryfikowac lokalnie."
+            echo "Nie oceniaj, czy zmiana moze zostac scalona - o tym decyduje CI."
+            echo
+            echo "--- LOG ---"
+            cat /tmp/build.tail.log
+          } > /tmp/prompt.txt
+
+      - name: Zapytaj model
+        env:
+          # Sekrety wchodzą tylko do tego kroku i tylko jako zmienne
+          # środowiskowe. Skrypt czyta je przez printenv i nie przekazuje
+          # dalej ani w argumentach, ani w logu.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          PROVIDER: ${{ inputs.provider }}
+          ESCALATE: ${{ inputs.escalate }}
+        run: |
+          set -euo pipefail
+          args=""
+          if [ -n "$PROVIDER" ]; then
+            args="-p $PROVIDER"
+          elif [ "$ESCALATE" = "true" ]; then
+            args="--escalate"
+          fi
+          # shellcheck disable=SC2086  # args jest budowane wylacznie z wartosci powyzej
+          bash .dep-automation/ai/scripts/ai-call.sh $args /tmp/prompt.txt > /tmp/diagnoza.md
+
+      - name: Oddaj diagnoze jako artefakt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: diagnoza-ai-${{ inputs.run_id }}
+          path: /tmp/diagnoza.md
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Podsumowanie w interfejsie przebiegu
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "## Diagnoza AI — PROPOZYCJA, nie wyrok"
+            echo
+            echo "Ta treść nie jest bramką. O tym, czy cokolwiek wjedzie na \`main\`,"
+            echo "decydują deterministyczne checki CI i ocena statusu przez Renovate."
+            echo
+            if [ -s /tmp/diagnoza.md ]; then
+              cat /tmp/diagnoza.md
+            else
+              echo "_Model nie zwrócił odpowiedzi. Szczegóły w logu kroku „Zapytaj model”._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
