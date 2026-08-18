@@ -2,17 +2,17 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>dudziakm/dep-automation"],
 
-  "description": "Warstwa JS/TS/Node. Nakłada się na default.json.",
+  "description": "JS/TS/Node layer. Applied on top of default.json.",
 
   "packageRules": [
     {
-      "description": "Zakresy aktualizujemy przez lockfile, a wydania filtrujemy po engines.node. Zamkniete w managerze npm, zeby preset dzialal tez w repo mieszanym (JS + JVM) i nie dotykal zaleznosci Mavena/Gradle'a.",
+      "description": "Ranges are updated through the lockfile and releases are filtered by engines.node. Scoped to the npm manager so that the preset also works in a mixed repo (JS + JVM) and does not touch Maven/Gradle dependencies.",
       "matchManagers": ["npm"],
       "rangeStrategy": "update-lockfile",
       "constraintsFiltering": "strict"
     },
     {
-      "description": "Narzędzia, które same są konfiguracją — major zawsze przez człowieka, jeden PR na major.",
+      "description": "Tools that are configuration themselves — a major always goes through a human, one PR per major.",
       "matchPackageNames": [
         "eslint",
         "typescript",
@@ -33,7 +33,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Playwright rusza się jako jedna całość — paczka, core i obraz dockerowy muszą się zgadzać.",
+      "description": "Playwright moves as a single whole — the package, core and the Docker image have to match.",
       "matchPackageNames": [
         "@playwright/test",
         "playwright",
@@ -43,7 +43,7 @@
       "groupName": "playwright"
     },
     {
-      "description": "Cypress i jego wtyczki też — wtyczki mają wąskie peer na wersję cypressa.",
+      "description": "Cypress and its plugins too — the plugins have a narrow peer range on the Cypress version.",
       "matchPackageNames": [
         "cypress",
         "cypress-real-events",
@@ -57,7 +57,7 @@
       "groupName": "cypress"
     },
     {
-      "description": "Tailwind razem z pluginem do bundlera.",
+      "description": "Tailwind together with the bundler plugin.",
       "matchPackageNames": [
         "tailwindcss",
         "@tailwindcss/vite",
@@ -66,14 +66,14 @@
       "groupName": "tailwind"
     },
     {
-      "description": "TypeScript bez semver dla typów — minor potrafi zepsuć kompilację, więc długa kwarantanna.",
+      "description": "TypeScript has no semver for types — a minor can break compilation, hence the long quarantine.",
       "matchPackageNames": ["typescript"],
       "minimumReleaseAge": "21 days",
       "automerge": false,
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Blok overrides jest polityką bezpieczeństwa, nie zależnością — Renovate go nie rusza.",
+      "description": "The overrides block is a security policy, not a dependency — Renovate does not touch it.",
       "matchDepTypes": ["overrides", "resolutions"],
       "enabled": false
     }
