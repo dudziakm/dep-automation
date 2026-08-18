@@ -226,16 +226,18 @@ przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
 
 ## Dokumentacja i warstwa AI
 
-- [`docs/PLAN-AUTOMATYZACJI.md`](docs/PLAN-AUTOMATYZACJI.md) — pełny plan
-  wykonawczy: pomiary, korekty wcześniejszych wniosków, kolejność wdrożenia.
-- [`ai/`](ai/README.md) — warstwa providerów AI dla agenta z Fazy 7, który
-  próbuje naprawić build padnięty po podbiciu zależności. **DeepSeek Flash
-  domyślnie**, DeepSeek Pro na eskalację, OpenRouter jako zapas na awarię
-  dostawcy, Gemini opisane ale wyłączone (brak klucza). Przełączenie providera to
-  zmiana trzech wartości w `ai/providers.json`, bo wszyscy mówią protokołem
-  zgodnym z OpenAI. Tam też opis, gdzie trzymać klucze: na koncie osobistym nie
-  ma sekretów Actions na poziomie użytkownika, więc leżą w jednym repo
-  sterującym.
+- [`docs/AUTOMATION-PLAN.md`](docs/AUTOMATION-PLAN.md) — full execution plan:
+  measurements, corrections of earlier conclusions, rollout order. The previous
+  Polish copy at `docs/PLAN-AUTOMATYZACJI.md` now redirects here.
+- [`ai/`](ai/README.md) — AI provider layer for the Phase 7 agent that tries to
+  fix a build broken by a dependency bump. **DeepSeek Flash by default**, DeepSeek
+  Pro for escalation, OpenRouter as the first fallback, Kimi as the second.
+  Gemini is not a provider in this layer: the free tier granted no access to the
+  Pro model, and the paid tier was rejected. Gemini models remain reachable only
+  through OpenRouter. Switching a provider is a change of three values in
+  `ai/providers.json`, because every remaining vendor speaks the OpenAI protocol.
+  The same document explains where keys live: a personal GitHub account has no
+  user-level Actions secrets, so they sit in this one control repository.
 
 Agent AI **nigdy nie jest bramką**: może wyłącznie zaproponować zmianę, a o tym,
 czy cokolwiek wjedzie na `main`, decydują deterministyczne checki CI i ocena
