@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Baza dla wszystkich repo dudziakm. Faza 2: same PR-y, automerge wyłączony.",
+  "description": "Base for all dudziakm repos. Phase 2: pull requests only, automerge disabled.",
   "extends": [
     "config:recommended",
     ":semanticCommits"
@@ -36,13 +36,13 @@
 
   "packageRules": [
     {
-      "description": "Każdy major wymaga ręcznej zgody z dashboardu.",
+      "description": "Every major requires manual approval from the dashboard.",
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Akcje GitHuba grupowo; przypięcie do SHA daje config:recommended.",
+      "description": "GitHub Actions as a group; pinning to a SHA comes from config:recommended.",
       "matchManagers": ["github-actions"],
       "groupName": "github actions"
     }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Repo z manifestami JS i JVM naraz. Obie warstwy, reguly obu ekosystemow sie nie nachodza, bo selektory sa rozlaczne.",
+  "description": "Repo with JS and JVM manifests at the same time. Both layers; the rules of the two ecosystems do not overlap, because the selectors are disjoint.",
 
   "extends": [
     "github>dudziakm/dep-automation:js",
