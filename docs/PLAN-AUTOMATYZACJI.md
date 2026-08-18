@@ -686,35 +686,55 @@ o wyborze providerów. Implementacja leży w katalogu [`ai/`](../ai/README.md).
 
 ### Decyzja
 
-**Gemini API jest głównym punktem dostępu do AI.** Domyślnie **Flash**, przy
-trudniejszym przypadku **Pro**. DeepSeek jest zapasem na wypadek awarii Google.
-OpenRouter jest przewidziany, ale **wyłączony** — włączamy go dopiero, gdy
-pojawi się potrzeba, której nie zaspokoi ani Google, ani DeepSeek.
+**DeepSeek jest głównym punktem dostępu do AI.** Domyślnie **Flash**, przy
+trudniejszym przypadku **Pro** — ten sam dostawca, ten sam klucz, mocniejszy
+model. OpenRouter jest zapasem na wypadek awarii DeepSeeka. Gemini zostaje
+opisane w konfiguracji, ale jest **wyłączone**: nie ma klucza Google, a płatny
+tier został odrzucony. Włączenie Gemini to zmiana statusu jednego wpisu.
 
 | Rola | Provider | Model | Status |
 |---|---|---|---|
-| domyślny | Gemini | `gemini-3.6-flash` | aktywny |
-| eskalacja | Gemini | `gemini-3.1-pro-preview` | aktywny |
-| zapas | DeepSeek | `deepseek-v4-flash` | zapas |
-| przewidziany | OpenRouter | `google/gemini-3.7-flash` | wyłączony |
+| domyślny | DeepSeek | `deepseek-v4-flash` | aktywny |
+| eskalacja | DeepSeek | `deepseek-v4-pro` | aktywny |
+| zapas | OpenRouter | `google/gemini-3.7-flash` | aktywny |
+| przewidziany | Gemini | `gemini-3.6-flash` | wyłączony |
+| przewidziany | Gemini | `gemini-3.1-pro-preview` | wyłączony |
+
+*(Wcześniejsza wersja tej sekcji stawiała Gemini jako domyślne, a DeepSeeka jako
+zapas. Zostało to odwrócone po decyzji o niewchodzeniu na płatny tier Gemini.
+Zapis zostawiam widoczny, żeby było jasne, że to zmiana decyzji, a nie
+przeoczenie.)*
+
+**Dlaczego eskalacja została u tego samego dostawcy.** Sprawdziłem na żywo, że
+`api.deepseek.com` wystawia dokładnie dwa modele — `deepseek-v4-flash` i
+`deepseek-v4-pro` — i że Pro realnie odpowiada. Pro jest trzykrotnie droższy i ma
+pięciokrotnie niższy limit współbieżności (500 wobec 2500), czyli to inny profil
+obliczeniowy, a nie ta sama rzecz pod inną nazwą. Eskalacja ma zmieniać moc
+modelu, a nie dostawcę: zmiana dostawcy zmienia naraz model, tokenizer i obsługę
+myślenia, więc nie dałoby się powiedzieć, czemu wynik się poprawił. OpenRouter
+odpowiada na inne pytanie — „co, gdy DeepSeek nie odpowiada" — i dlatego jest
+zapasem, nie eskalacją.
 
 ### Dlaczego przełączanie jest tanie: jeden protokół u wszystkich
 
-Kluczowe ustalenie tej sekcji: **Gemini, DeepSeek i OpenRouter wystawiają
+Kluczowe ustalenie tej sekcji: **DeepSeek, OpenRouter i Gemini wystawiają
 endpointy zgodne z OpenAI**, więc przełączenie providera to zmiana trzech
 wartości — base URL, nazwy sekretu i nazwy modelu — a nie zmiana kodu.
 
 | Provider | Base URL zgodny z OpenAI |
 |---|---|
-| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` |
 | DeepSeek | `https://api.deepseek.com` |
 | OpenRouter | `https://openrouter.ai/api/v1` |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` |
 
 Sprawdzone empirycznie: ten sam skrypt `ai/scripts/ai-call.sh`, bez zmiany ani
-jednej linii, dostał poprawną odpowiedź z DeepSeeka i z OpenRoutera, a przez
-OpenRouter także z modeli Gemini. Endpoint Gemini potwierdzony co do hosta i
-ścieżki (odpowiada „Please pass a valid API key" na nieprawidłowym kluczu), ale
-**nie potwierdzony wywołaniem**, bo w środowisku nie było klucza Gemini.
+jednej linii, dostał poprawną odpowiedź z obu modeli DeepSeeka i z OpenRoutera, a
+przez OpenRouter także z modeli Gemini. Potwierdzone na żywo także zejście na
+zapas: przy podstawionym nieprawidłowym kluczu DeepSeeka oba jego wpisy odpadły na
+HTTP 401, a odpowiedź przyszła z OpenRoutera. Endpoint Gemini potwierdzony co do
+hosta i ścieżki (odpowiada „Please pass a valid API key" na nieprawidłowym
+kluczu), ale **nie potwierdzony wywołaniem**, bo w środowisku nie było klucza
+Gemini.
 
 Zastrzeżenie, którego nie należy wygładzać: warstwa zgodności Gemini z OpenAI
 jest przez Google **oznaczona jako beta** i nie ma pełnej parzystości funkcji.
@@ -726,27 +746,37 @@ bardziej wymyślnego bez ponownego sprawdzenia.
 ### Koszty — korekta pozycji z tabeli kosztów
 
 Tabela kosztów wyżej wymienia „Gemini API — triage i naprawy: 2–6 USD" i
-„OpenRouter — eskalacje: 1–3 USD". Po ustaleniu aktualnych cenników druga pozycja
-**wypada z rachunku**, bo OpenRouter jest wyłączony. Zamiast niej wchodzi
-DeepSeek jako zapas, który jest tańszy od Gemini o rząd wielkości.
+„OpenRouter — eskalacje: 1–3 USD". Po przestawieniu łańcucha na DeepSeeka
+**pierwsza pozycja wypada z rachunku** (Gemini jest wyłączone), a cała warstwa
+schodzi wyraźnie niżej: domyślny model jest około siedmiokrotnie tańszy na wejściu
+i ponad jedenastokrotnie na wyjściu od `gemini-3.6-flash`, który miał tę rolę
+wcześniej.
 
-| Model | Wejście / 1M | Wyjście / 1M |
-|---|---|---|
-| `gemini-3.6-flash` | 1,50 USD | 7,50 USD |
-| `gemini-3.1-pro-preview` | 2,00 USD (4,00 powyżej 200k) | 12,00 USD (18,00 powyżej 200k) |
-| `deepseek-v4-flash` | 0,22 USD poza szczytem / 0,44 w szczycie | 0,66 / 1,32 USD |
-| `google/gemini-3.7-flash` (OpenRouter) | 0,375 USD | 1,875 USD |
+| Model | Rola | Wejście / 1M | Wyjście / 1M |
+|---|---|---|---|
+| `deepseek-v4-flash` | domyślny | 0,22 USD poza szczytem / 0,44 w szczycie | 0,66 / 1,32 USD |
+| `deepseek-v4-pro` | eskalacja | 0,66 / 1,32 USD | 1,98 / 3,96 USD |
+| `google/gemini-3.7-flash` (OpenRouter) | zapas | 0,375 USD | 1,875 USD |
+| `gemini-3.6-flash` | wyłączony | 1,50 USD | 7,50 USD |
+| `gemini-3.1-pro-preview` | wyłączony | 2,00 USD (4,00 powyżej 200k) | 12,00 USD (18,00 powyżej 200k) |
+
+Szczyt u DeepSeeka to 01:00–04:00 i 06:00–10:00 UTC. Trafienie w cache wejściowy
+jest u niego skrajnie tanie (0,007–0,014 USD za milion dla Flasha), co dla agenta
+czytającego wielokrotnie ten sam log builda ma realne znaczenie.
 
 Dwie rzeczy, które podnoszą realny koszt względem tej tabeli:
 
-- **Tokeny myślenia liczą się jako wyjście** i dla modeli Gemini 3 myślenia
-  **nie da się wyłączyć.** Zmierzone: jednosłowna odpowiedź `gemini-3.7-flash`
-  kosztowała 108 tokenów myślenia i 1 token treści. Przy modelach Flash to nadal
-  drobne pieniądze, ale przy Pro nie wolno tego ignorować.
-- **Pro nie ma darmowego tieru** (Google zdjęło modele Pro z Free 01.04.2026).
-  Darmowy tier obejmuje Flash, ale jego treść jest używana do ulepszania
-  produktów Google — dla agenta czytającego logi buildów z 44 prywatnych repo to
-  argument za tierem płatnym.
+- **Tokeny myślenia liczą się jako wyjście**, także u DeepSeeka — tryb myślenia
+  jest domyślny dla obu wariantów V4. Zmierzone na żywo: jednosłowna odpowiedź
+  kosztowała 42 tokeny myślenia u Flasha i 67 u Pro, a `gemini-3.7-flash` przez
+  OpenRouter 124. Dla modeli Gemini 3 myślenia **nie da się wyłączyć**.
+- **Skala się nie zmienia, ale zasada zostaje.** Przy tych cenach cały łańcuch to
+  nadal jednostki dolarów miesięcznie, co nie jest argumentem za eskalowaniem w
+  pętli. Jeden przebieg Flash, jeden Pro, potem człowiek.
+
+Znika natomiast poprzedni argument o darmowym tierze: DeepSeek go nie ma, więc nie
+istnieje pokusa użycia tieru, w którym dostawca wykorzystuje treść do ulepszania
+produktów. Logi buildów z 44 prywatnych repo idą wyłącznie przez płatne API.
 
 ### Bezpieczeństwo: agent nigdy nie jest bramką
 
@@ -766,15 +796,40 @@ leży poza `.github/workflows/`, więc GitHub go nie widzi, i ma tylko trigger
 `workflow_dispatch`. Uprawnienia: `contents: read` i `actions: read`, nic więcej.
 Checkout z `persist-credentials: false`.
 
+### Gdzie mieszkają klucze: jedno repo sterujące, nie sto
+
+Sprawdzone, bo brzmiało jak założenie: **na koncie osobistym nie istnieją sekrety
+Actions na poziomie użytkownika.** Dokumentacja GitHuba wymienia trzy poziomy —
+organizacja, repozytorium, środowisko repozytorium — i tylko poziom organizacyjny
+pozwala współdzielić jeden wpis między repozytoriami. Potwierdza to API: `GET
+/user/actions/secrets` zwraca **404** (endpoint nie istnieje), podczas gdy `GET
+/user/codespaces/secrets` zwraca **403** z dokumentacją tego endpointu, czyli
+istnieje — ale to magazyn Codespaces, którego Actions nie czyta. Konto `dudziakm`
+to `type=User` bez żadnej organizacji.
+
+Wzorzec, który z tego wynika: **klucze AI leżą wyłącznie w `dep-automation`**, tam
+mieszka workflow agenta, a do repozytoriów docelowych sięga on fine-grained
+tokenem z uprawnieniami Contents: Read, Actions: Read i Metadata: Read — i niczym
+więcej. Pełny opis, wraz z rotacją, zachowaniem przy wygasłym tokenie i wadami
+tego układu (token przywiązany do człowieka, jeden punkt kompromitacji, limity
+minut Actions dla repo prywatnych), jest w [`ai/README.md`](../ai/README.md) w
+sekcji „Gdzie mieszkają sekrety na koncie osobistym".
+
 ### `gh-aw`: co potwierdzone, co obejściem
 
 `github/gh-aw` ma wbudowane silniki `copilot`, `claude`, `codex`, `gemini` i
-`pi`. Gemini jest więc obsługiwany wprost: `engine: gemini` plus sekret
-`GEMINI_API_KEY`, albo bezkluczowo przez Google Workload Identity Federation
-(wtedy silnik przełącza się na backend Vertex AI). **DeepSeeka na tej liście nie
-ma** — trasa do niego to `engine: copilot` w trybie BYOK, przez
+`pi`. **DeepSeeka na tej liście nie ma**, więc domyślny provider tej warstwy
+wymaga w gh-aw trasy obejściowej: `engine: copilot` w trybie BYOK, przez
 `COPILOT_PROVIDER_BASE_URL`, `COPILOT_PROVIDER_API_KEY` i `COPILOT_MODEL`, czyli
-znów te same trzy wartości.
+znów te same trzy wartości. To znany koszt wyboru DeepSeeka, wart wypowiedzenia
+wprost: gdyby Gemini było domyślne, wystarczyłoby `engine: gemini` plus sekret
+`GEMINI_API_KEY` (albo bezkluczowe Google Workload Identity Federation, które
+przełącza silnik na backend Vertex AI). Przy jednym wywołaniu
+`chat/completions` różnica jest niewielka, ale przestaje być niewielka, gdyby
+warstwa miała korzystać z wbudowanych mechanizmów silnika.
+
+Zapis Fazy 7 w tabeli faz („Agent gh-aw + Gemini") należy więc czytać jako „agent
+gh-aw + DeepSeek przez BYOK".
 
 Mechanizmy bezpieczeństwa gh-aw, na które plan liczy: job agenta domyślnie
 read-only w sandboksie, firewall ruchu wychodzącego z listą dozwolonych hostów,
@@ -800,12 +855,20 @@ mapowanie pochodzi z dokumentacji, nie z działającego workflow.
 
 Źródła dopisane do sekcji o providerach AI:
 
+- Modele i cennik DeepSeeka, w tym base URL zgodny z OpenAI oraz limity współbieżności: [api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing/)
+- Cennik OpenRoutera pobrany maszynowo: [openrouter.ai/api/v1/models](https://openrouter.ai/api/v1/models)
 - Cennik Gemini Developer API: [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)
 - Zgodność Gemini z OpenAI (endpoint, ograniczenia, `reasoning_effort`): [ai.google.dev/gemini-api/docs/openai](https://ai.google.dev/gemini-api/docs/openai)
 - Limity Gemini API i progi tierów: [ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits)
-- Modele i cennik DeepSeeka, w tym base URL zgodny z OpenAI: [api-docs.deepseek.com/quick_start/pricing](https://api-docs.deepseek.com/quick_start/pricing/)
 - Silniki gh-aw i ich uwierzytelnianie: [github.github.com/gh-aw/reference/engines](https://github.github.com/gh-aw/reference/engines/), [reference/auth](https://github.github.com/gh-aw/reference/auth/)
 - Gemini w gh-aw: [github.github.com/gh-aw/engines/gemini](https://github.github.com/gh-aw/engines/gemini/)
+
+Źródła dopisane do sekcji o sekretach:
+
+- Poziomy sekretów Actions (organizacja, repozytorium, środowisko): [docs.github.com/actions/concepts/security/secrets](https://docs.github.com/en/actions/concepts/security/secrets)
+- Typy sekretów i zasięg współdzielenia: [docs.github.com/code-security/reference/secret-security/secret-types](https://docs.github.com/en/code-security/reference/secret-security/secret-types)
+- Ograniczenia i limity fine-grained PAT (brak Checks API, limit 50 tokenów, ważność do 366 dni): [docs.github.com/authentication/.../managing-your-personal-access-tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#fine-grained-personal-access-tokens-limitations)
+- Minuty Actions w limicie planu: [docs.github.com/billing/reference/product-usage-included](https://docs.github.com/en/billing/reference/product-usage-included)
 
 ### Metodologia i znane braki
 

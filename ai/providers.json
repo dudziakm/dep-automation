@@ -1,48 +1,28 @@
 {
-  "wersja": 1,
+  "wersja": 2,
   "opis": "Warstwa providerów AI dla agenta naprawiającego padające buildy po podbiciu zależności. Wszystkie wpisy mówią OpenAI-compatible /chat/completions, więc przełączenie providera to zmiana base_url + sekretu + modelu. Nazwy sekretów, nigdy wartości.",
   "lancuch": {
-    "domyslny": "gemini-flash",
-    "eskalacja": "gemini-pro",
-    "zapas": "deepseek"
+    "domyslny": "deepseek",
+    "eskalacja": "deepseek-pro",
+    "zapas": "openrouter"
   },
   "domyslne_parametry": {
     "max_tokens": 4096,
     "temperature": 0,
     "timeout_s": 120,
-    "uwaga_max_tokens": "Tokeny myślenia liczą się jako output i są wliczane w max_tokens. Dla modeli Gemini 3 myślenia NIE da się wyłączyć. Przy zbyt małym max_tokens odpowiedź wraca pusta z finish_reason=length — zmierzone empirycznie."
+    "uwaga_max_tokens": "Tokeny myślenia liczą się jako output i są wliczane w max_tokens. Przy zbyt małym max_tokens odpowiedź wraca pusta z finish_reason=length — zmierzone empirycznie na DeepSeeku i na Gemini przez OpenRouter."
   },
   "providers": {
-    "gemini-flash": {
-      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "model": "gemini-3.6-flash",
-      "secret": "GEMINI_API_KEY",
-      "status": "aktywny",
-      "rola": "domyślny",
-      "notatka": "Główny punkt dostępu do AI. Pierwsze podejście do każdego padniętego builda. Endpoint zgodny z OpenAI, oficjalnie oznaczony przez Google jako beta.",
-      "cennik_usd_za_1M": { "input": 1.5, "output": 7.5 },
-      "darmowy_tier": true,
-      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
-    },
-    "gemini-pro": {
-      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-      "model": "gemini-3.1-pro-preview",
-      "secret": "GEMINI_API_KEY",
-      "status": "aktywny",
-      "rola": "eskalacja",
-      "notatka": "Trudniejszy przypadek: Flash nie odpowiedział, odpowiedział błędem albo wyszedł pusty. Ten sam klucz co Flash — eskalacja to wyłącznie zmiana nazwy modelu. Brak darmowego tieru (Pro zdjęte z Free 01.04.2026).",
-      "cennik_usd_za_1M": { "input": 2.0, "output": 12.0, "powyzej_200k_input": 4.0, "powyzej_200k_output": 18.0 },
-      "darmowy_tier": false,
-      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
-    },
     "deepseek": {
       "base_url": "https://api.deepseek.com",
       "model": "deepseek-v4-flash",
       "secret": "DEEPSEEK_API_KEY",
-      "status": "zapas",
-      "rola": "zapas",
-      "notatka": "Awaryjne wyjście, gdy Gemini jest niedostępny (429, 5xx, awaria regionu, wyczerpany limit). Niezależny dostawca i niezależny klucz, więc awaria Google go nie dotyka. Najtańszy z całej trójki. API zgodne z OpenAI potwierdzone empirycznie.",
+      "status": "aktywny",
+      "rola": "domyślny",
+      "notatka": "Główny punkt dostępu. Tani, szybki, API zgodne z OpenAI potwierdzone empirycznie. Pierwsze podejście do każdego padniętego builda.",
       "cennik_usd_za_1M": {
+        "input_cache_hit_off_peak": 0.007,
+        "input_cache_hit_peak": 0.014,
         "input_cache_miss_off_peak": 0.22,
         "input_cache_miss_peak": 0.44,
         "output_off_peak": 0.66,
@@ -51,16 +31,56 @@
       "darmowy_tier": false,
       "zrodlo_cennika": "https://api-docs.deepseek.com/quick_start/pricing/"
     },
+    "deepseek-pro": {
+      "base_url": "https://api.deepseek.com",
+      "model": "deepseek-v4-pro",
+      "secret": "DEEPSEEK_API_KEY",
+      "status": "aktywny",
+      "rola": "eskalacja",
+      "notatka": "Trudniejszy przypadek: Flash nie odpowiedział, odpowiedział błędem albo wyszedł pusty. Ten sam klucz i ten sam base_url co Flash — eskalacja to wyłącznie zmiana nazwy modelu. Trzykrotnie droższy od Flasha i ma niższy limit współbieżności (500 vs 2500).",
+      "cennik_usd_za_1M": {
+        "input_cache_hit_off_peak": 0.022,
+        "input_cache_hit_peak": 0.044,
+        "input_cache_miss_off_peak": 0.66,
+        "input_cache_miss_peak": 1.32,
+        "output_off_peak": 1.98,
+        "output_peak": 3.96
+      },
+      "darmowy_tier": false,
+      "zrodlo_cennika": "https://api-docs.deepseek.com/quick_start/pricing/"
+    },
     "openrouter": {
       "base_url": "https://openrouter.ai/api/v1",
       "model": "google/gemini-3.7-flash",
       "secret": "OPENROUTER_API_KEY",
-      "status": "wyłączony",
-      "rola": "przewidziany",
-      "notatka": "Przewidziany, nieaktywny. Włączamy dopiero, gdy pojawi się potrzeba routingu do modelu, którego nie ma ani u Google, ani w DeepSeeku. Zaleta: jeden klucz do wielu dostawców. Wada: dodatkowy pośrednik w ścieżce zaufania dla agenta, który czyta cudze changelogi.",
+      "status": "aktywny",
+      "rola": "zapas",
+      "notatka": "Awaryjne wyjście, gdy DeepSeek jest niedostępny (429, 5xx, awaria dostawcy). Niezależny dostawca i niezależny klucz, więc awaria DeepSeeka go nie dotyka. Daje też dostęp do modeli Gemini bez posiadania klucza Google — potwierdzone empirycznie.",
       "cennik_usd_za_1M": { "input": 0.375, "output": 1.875 },
       "darmowy_tier": false,
       "zrodlo_cennika": "https://openrouter.ai/api/v1/models"
+    },
+    "gemini-flash": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "model": "gemini-3.6-flash",
+      "secret": "GEMINI_API_KEY",
+      "status": "wyłączony",
+      "rola": "przewidziany",
+      "notatka": "Opisany i gotowy, ale nieaktywny — brak klucza Google i decyzja o niewchodzeniu na płatny tier Gemini. Włączenie: ustaw GEMINI_API_KEY, zmień status na 'aktywny' i wpisz 'gemini-flash' w lancuch.domyslny. Endpoint potwierdzony co do hosta i ścieżki, samo wywołanie modelu NIE potwierdzone.",
+      "cennik_usd_za_1M": { "input": 1.5, "output": 7.5 },
+      "darmowy_tier": true,
+      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
+    },
+    "gemini-pro": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "model": "gemini-3.1-pro-preview",
+      "secret": "GEMINI_API_KEY",
+      "status": "wyłączony",
+      "rola": "przewidziany",
+      "notatka": "Jak gemini-flash, tylko mocniejszy i bez darmowego tieru (Pro zdjęte z Free 01.04.2026). Sensowny wyłącznie jako eskalacja po włączeniu gemini-flash.",
+      "cennik_usd_za_1M": { "input": 2.0, "output": 12.0, "powyzej_200k_input": 4.0, "powyzej_200k_output": 18.0 },
+      "darmowy_tier": false,
+      "zrodlo_cennika": "https://ai.google.dev/gemini-api/docs/pricing"
     }
   }
 }

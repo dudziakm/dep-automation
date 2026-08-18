@@ -45,7 +45,9 @@ jobs:
             exit 1
           fi
 
-          # Łańcuch nie może wskazywać na providera, którego nie ma.
+          # Łańcuch nie może wskazywać na providera, którego nie ma, ani na
+          # takiego, który jest wyłączony — inaczej domyślne wywołanie poszłoby
+          # do providera bez klucza i wywróciłoby się dopiero w locie.
           for rola in domyslny eskalacja zapas; do
             ref=$(jq -r ".lancuch.${rola} // empty" ai/providers.json)
             [ -n "$ref" ] || continue
@@ -53,7 +55,26 @@ jobs:
               echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na nieistniejacego providera '$ref'"
               exit 1
             fi
+            pstatus=$(jq -r --arg r "$ref" '.providers[$r].status' ai/providers.json)
+            if [ "$pstatus" != "aktywny" ]; then
+              echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na '$ref', ktory ma status '$pstatus' zamiast 'aktywny'"
+              exit 1
+            fi
           done
+
+          # Provider spoza łańcucha (np. Gemini) ma prawo być wyłączony, ale nie
+          # ma prawa udawać aktywnego — status 'aktywny' poza łańcuchem znaczy,
+          # że ktoś zapomniał go dopisać do łańcucha albo przełączyć.
+          osierocone=$(jq -r '
+            [.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas] as $chain
+            | .providers
+            | to_entries[]
+            | select(.value.status == "aktywny" and ([.key] | inside($chain)) == false)
+            | .key' ai/providers.json)
+          if [ -n "$osierocone" ]; then
+            echo "::error file=ai/providers.json::providerzy ze statusem 'aktywny' poza lancuchem: $osierocone"
+            exit 1
+          fi
 
       - name: w konfiguracji nie ma wartosci sekretow, tylko ich nazwy
         run: |
