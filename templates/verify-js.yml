@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+# Opt-in smoke start for service repos: set VERIFY_SMOKE to 'true' in this
+# workflow on repositories that expose a real start script. Default stays off so
+# install-only / E2E harness repos are not started as servers.
+env:
+  VERIFY_SMOKE: 'false'
+
 concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: true
@@ -132,6 +138,56 @@ jobs:
             npm)  npm run build ;;
           esac
 
+      # Opt-in: set VERIFY_SMOKE=true (workflow env or repo variable) on services
+      # with a start script. Distinguishes missing credentials (soft pass) from
+      # dependency crashes (fail).
+      - name: Smoke start
+        if: env.VERIFY_SMOKE == 'true'
+        run: |
+          set -euo pipefail
+          if ! node -e "const s=require('./package.json').scripts||{};process.exit(s.start?0:1)"; then
+            echo "Brak skryptu start — pomijam smoke."; exit 0
+          fi
+          log="$(mktemp)"
+          case "${{ steps.pm.outputs.mgr }}" in
+            pnpm) pnpm run start >"$log" 2>&1 & ;;
+            yarn) yarn run start >"$log" 2>&1 & ;;
+            npm)  npm run start >"$log" 2>&1 & ;;
+          esac
+          pid=$!
+          # Give the process a few seconds to boot or crash.
+          for i in 1 2 3 4 5 6 7 8; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              wait "$pid" || true
+              echo "----- smoke stdout/stderr -----"
+              cat "$log"
+              if grep -Eiq 'API[_-]?KEY|api key|OPENAI|ANTHROPIC|SUPABASE|supabaseKey is required|missing.*(env|key|credential)|not set|ECONNREFUSED.*(54321|5432)' "$log"; then
+                echo "Smoke: process exited for missing credentials/config — treating as soft pass."
+                exit 0
+              fi
+              if grep -Eiq 'Cannot find module|ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND|SyntaxError|TypeError:|Error: Cannot' "$log"; then
+                echo "Smoke: dependency/runtime crash — failing the gate."
+                exit 1
+              fi
+              echo "Smoke: process exited before becoming ready without a clear credentials signal — failing."
+              exit 1
+            fi
+            if grep -Eiq 'listening|started|ready|localhost:[0-9]|Local:|Network:' "$log"; then
+              echo "Smoke: server looks ready."
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              echo "----- smoke stdout/stderr (truncated) -----"
+              tail -n 40 "$log"
+              exit 0
+            fi
+            sleep 1
+          done
+          # Still alive after the window — good enough for a smoke check.
+          echo "Smoke: process still running after boot window — OK."
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          tail -n 40 "$log"
+
       # Bramka, ktora po cichu pomija typecheck i build, swieci na zielono po samej
       # instalacji. To wciaz realny sygnal (zla wersja, rozjechany lockfile, konflikt
       # peer albo override), ale duzo slabszy niz sie wydaje. Wypisujemy wprost, co
@@ -150,6 +206,10 @@ jobs:
           if node -e "const p=require('./package.json');process.exit(p.scripts&&p.scripts.build?0:1)"; then
             bd=tak
           fi
+          sm=nie
+          if [ "${VERIFY_SMOKE:-false}" = "true" ] && node -e "const s=require('./package.json').scripts||{};process.exit(s.start?0:1)"; then
+            sm=tak
+          fi
           {
             echo "### Bramka verify — \`${{ matrix.dir }}\`"
             echo ""
@@ -158,6 +218,7 @@ jobs:
             echo "| instalacja zaleznosci | tak |"
             echo "| typecheck (\`tsc --noEmit\`) | $ts |"
             echo "| build | $bd |"
+            echo "| smoke start | $sm |"
             if [ "$ts" = nie ] && [ "$bd" = nie ]; then
               echo ""
               echo "> **Uwaga:** w tym katalogu bramka sprawdza wylacznie instalacje."
