@@ -1,0 +1,124 @@
+name: validate ai layer
+
+# Osobny plik od validate.yml świadomie: tamten waliduje presety Renovate, ten
+# warstwę providerów. Rozdzielone, żeby błąd w jednym nie ukrywał drugiego.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ai/**"
+      - ".github/workflows/validate-ai.yml"
+  pull_request:
+    paths:
+      - "ai/**"
+      - ".github/workflows/validate-ai.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # v7, nie v4: v4 działa, ale runner zgłasza ostrzeżenie o wycofaniu
+      # Node.js 20. Szablon w ai/templates/ też jest na v7 — jedna wersja w
+      # całej warstwie.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: providers.json jest poprawnym JSON-em i ma wymagane pola
+        run: |
+          set -euo pipefail
+          jq -e . ai/providers.json > /dev/null
+
+          # Każdy provider musi mieć cztery pola, bez których skrypt nie zadziała.
+          braki=$(jq -r '
+            .providers
+            | to_entries[]
+            | select((.value.base_url // "") == ""
+                  or (.value.model // "") == ""
+                  or (.value.secret // "") == ""
+                  or (.value.status // "") == "")
+            | .key' ai/providers.json)
+          if [ -n "$braki" ]; then
+            echo "::error file=ai/providers.json::niekompletne wpisy providerow: $braki"
+            exit 1
+          fi
+
+          # Łańcuch nie może wskazywać na providera, którego nie ma, ani na
+          # takiego, który jest wyłączony — inaczej domyślne wywołanie poszłoby
+          # do providera bez klucza i wywróciłoby się dopiero w locie.
+          for rola in domyslny eskalacja zapas; do
+            ref=$(jq -r ".lancuch.${rola} // empty" ai/providers.json)
+            [ -n "$ref" ] || continue
+            if ! jq -e --arg r "$ref" '.providers | has($r)' ai/providers.json > /dev/null; then
+              echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na nieistniejacego providera '$ref'"
+              exit 1
+            fi
+            pstatus=$(jq -r --arg r "$ref" '.providers[$r].status' ai/providers.json)
+            if [ "$pstatus" != "aktywny" ]; then
+              echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na '$ref', ktory ma status '$pstatus' zamiast 'aktywny'"
+              exit 1
+            fi
+          done
+
+          # Provider spoza łańcucha (np. Gemini) ma prawo być wyłączony, ale nie
+          # ma prawa udawać aktywnego — status 'aktywny' poza łańcuchem znaczy,
+          # że ktoś zapomniał go dopisać do łańcucha albo przełączyć.
+          osierocone=$(jq -r '
+            [.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas] as $chain
+            | .providers
+            | to_entries[]
+            | select(.value.status == "aktywny" and ([.key] | inside($chain)) == false)
+            | .key' ai/providers.json)
+          if [ -n "$osierocone" ]; then
+            echo "::error file=ai/providers.json::providerzy ze statusem 'aktywny' poza lancuchem: $osierocone"
+            exit 1
+          fi
+
+      - name: w konfiguracji nie ma wartosci sekretow, tylko ich nazwy
+        run: |
+          set -euo pipefail
+          # Kontrola higieny: żaden ciąg wyglądający jak klucz API nie ma prawa
+          # trafić do repo. Wzorce pokrywają formaty Google, DeepSeeka i OpenRoutera.
+          if grep -rEn 'AIza[0-9A-Za-z_-]{30,}|sk-[0-9a-zA-Z]{20,}|sk-or-v1-[0-9a-f]{16,}' ai/; then
+            echo "::error::w katalogu ai/ znaleziono ciag wygladajacy jak klucz API"
+            exit 1
+          fi
+          echo "brak sladow sekretow — OK"
+
+      - name: shellcheck i bash -n
+        run: |
+          set -euo pipefail
+          shellcheck ai/scripts/*.sh
+          for f in ai/scripts/*.sh; do bash -n "$f"; done
+
+      - name: szablony workflow sa poprawnym YAML-em
+        run: |
+          set -euo pipefail
+          for f in ai/templates/*.yml; do
+            python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$f"
+            echo "$f OK"
+          done
+
+      - name: skrypt dziala bez sekretow w trybach informacyjnych
+        run: |
+          set -euo pipefail
+          bash ai/scripts/ai-call.sh --list
+          bash ai/scripts/ai-call.sh --check
+
+      - name: bez sekretow realne wywolanie konczy sie kodem 3, nie sukcesem
+        run: |
+          set -euo pipefail
+          # Test kontrolny na zachowanie fail-closed: brak kluczy nie może dać
+          # exit 0, bo wywołujący uznałby brak odpowiedzi za pustą odpowiedź.
+          rc=0
+          echo "test" | bash ai/scripts/ai-call.sh > /dev/null 2>&1 || rc=$?
+          if [ "$rc" -ne 3 ]; then
+            echo "::error::oczekiwano kodu 3 przy braku sekretow, otrzymano $rc"
+            exit 1
+          fi
+          echo "fail-closed potwierdzony — kod 3"
