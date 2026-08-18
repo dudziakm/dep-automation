@@ -72,6 +72,24 @@ w `playwright-lum-project-cypress`.
 Zostawiam włączone, bo baza OSV jest odpytywana lokalnie (bez limitów zapytań),
 ale traktuj to jako sygnał, nie gwarancję, i licz się ze zmianą zachowania.
 
+**`silent.json` nie używa `mode: silent`.** Nazwa presetu jest myląca i to celowy
+kompromis — nazwa została, zachowanie się zmieniło. `mode: silent` blokuje nie
+tylko PR-y i gałęzie, ale **także utworzenie samego Dependency Dashboardu**, więc
+repo w tym trybie jest kompletnie niewidoczne. Sprawdzone uruchomieniem:
+
+```
+INFO: Repository is running with mode=silent and will not make Issues or PRs by default
+```
+
+i w tym samym przebiegu **brak** linii `Would ensure Dependency Dashboard`, którą
+Renovate wypisuje dla repo w trybie zwykłym. Zamiast tego używamy
+`dependencyDashboardApproval: true`: dashboard powstaje i wypełnia się listą
+aktualizacji, ale żadna gałąź ani PR nie powstaje, dopóki człowiek nie odhaczy
+pozycji. Efekt jest ten, o który chodziło — widoczność bez kosztu.
+
+Uwaga na kolejność nadpisań: `mode` z presetu wygrywa z `RENOVATE_MODE` w
+zmiennych środowiskowych, więc tego nie da się obejść z linii poleceń.
+
 ## Pułapka: walidator nie sprawdza zdalnych presetów
 
 `renovate-config-validator` **nie pobiera** presetów wskazanych przez `github>`.
@@ -111,10 +129,58 @@ package`.
 # Zasiew renovate.json do repo docelowych (PR na gałęzi). Domyślnie dry-run.
 ./scripts/seed.sh repos.tsv            # pokazuje, co by zrobił
 APPLY=1 ./scripts/seed.sh repos.tsv    # realnie tworzy PR-y
+
+# Scalenie zasianych PR-ów z gałęzi chore/renovate-config.
+./scripts/merge-seeded.sh repos.tsv
+
+# Rozpoznanie kształtu repo JS (manager, build, typecheck, tsconfig, liczba paczek).
+./scripts/shapes.sh repos.tsv
+
+# Zasiew bramki verify do aktywnych repo JS. Domyślnie dry-run.
+./scripts/seed-verify.sh repos.tsv            # pokazuje, co by zrobił
+APPLY=1 ./scripts/seed-verify.sh repos.tsv    # realnie tworzy PR-y
+ONLY=repoA,repoB APPLY=1 ./scripts/seed-verify.sh repos.tsv
 ```
 
 `repos.tsv` w repo jest snapshotem klasyfikacji, nie źródłem prawdy. Przegeneruj
 go przed każdą większą zmianą zakresu.
+
+Każdy skrypt, który cokolwiek zapisuje, zaczyna od porównania `gh api user` z
+`OWNER` i przerywa przy niezgodności. To nie jest ostrożność na wyrost: na
+maszynie z kilkoma kontami `gh` push przechodzi (git ma własne poświadczenia), a
+dopiero `gh pr create` kończy się `must be a collaborator` — i zostają wypchnięte
+gałęzie bez PR-ów.
+
+## Bramka verify i jej realny zasięg
+
+`templates/verify-js.yml` to warunek wstępny automerge: instalacja z lockfile'a,
+`tsc --noEmit` gdy repo ma TypeScript w zależnościach, `build` gdy istnieje taki
+skrypt. Świadomie **nie uruchamia E2E** — zestawy Playwrighta i Cypressa w tych
+repo celują w zewnętrzne serwisy, z których część zniknęła, a część blokuje ruch
+z adresów centrów danych. Jako bramka dawałyby szum zamiast dowodu.
+
+Bramka jest potwierdzona testem kontrolnym, nie tylko rozumowaniem. W
+`testPwSetup` podmieniono `@playwright/test` na nieistniejącą wersję `1.99.99`;
+workflow zapalił się na czerwono na kroku `Instalacja` z `npm error code ETARGET`.
+Po odczytaniu wyniku gałąź i PR zostały usunięte.
+
+Trzeba jednak znać granice tego sygnału:
+
+- **Repo bez `build` i bez TypeScriptu w zależnościach dostają bramkę
+  install-only.** Dotyczy to większości repo testowych. `npm ci` nadal wyłapuje
+  nieistniejącą wersję, rozjechany lockfile, konflikt `peer` i sprzeczny
+  `overrides` — ale nie wyłapie regresji zachowania.
+- **`tsc --noEmit` przy `skipLibCheck: true` jest słabsze, niż się wydaje.**
+  Sprawdzone na `web-ideas/projects/program-tv`: downgrade `next` z `^16.3.0` na
+  `14` oraz `lucide-react` z `^0.525.0` na `0.100.0` przeszedł i typecheck, i
+  build na zielono.
+- Dlatego workflow kończy się krokiem, który wypisuje do podsumowania zadania,
+  które etapy faktycznie się wykonały. Zielona bramka install-only ma o tym
+  mówić wprost, zamiast udawać pełne pokrycie.
+
+Nie rozsiewaj bramki szerzej, niż potrzeba: repozytoria są prywatne, więc minuty
+Actions realnie się zużywają. Z tego samego powodu workflow nie ma harmonogramu —
+uruchamia się na PR-ach, na `push` do gałęzi domyślnej i ręcznie.
 
 ## Instalacja aplikacji Renovate
 
@@ -126,6 +192,37 @@ onboarding z gołym `config:recommended`, czyli bez tej polityki.
 2. Zainstaluj aplikację: https://github.com/apps/renovate
 3. Wybierz repozytoria z kolumny `preset` różnej od `skip`.
 4. Sprawdź Dependency Dashboard w kilku repo, zanim rozszerzysz zakres.
+
+**Sam config niczego nie uruchamia.** Zasiew `renovate.json` do 54 repozytoriów
+nie powoduje żadnego działania bota, dopóki aplikacja nie jest zainstalowana —
+nie powstaje ani jeden PR, ani jeden Dependency Dashboard, i nie ma też żadnego
+komunikatu o błędzie. Cisza wygląda identycznie jak zepsuty config, więc nie
+diagnozuj jej po objawach: sprawdź listę zainstalowanych aplikacji.
+
+Sprawdzenie, czy bot kiedykolwiek cokolwiek zrobił (`0` = nigdy nie przebiegł):
+
+```bash
+gh api -X GET search/issues -f q='user:dudziakm author:app/renovate' --jq .total_count
+```
+
+Rozdzielenie „config jest zepsuty" od „bot nie działa" — dry-run lokalnie, bez
+aplikacji i bez zmian w repo:
+
+```bash
+RENOVATE_TOKEN="$(gh auth token -u dudziakm)" \
+GITHUB_COM_TOKEN="$(gh auth token -u dudziakm)" \
+  npx --yes renovate --dry-run=full --platform=github dudziakm/testPwSetup
+```
+
+Zdrowy config kończy się `"status": "activated"`, `"onboarded": true` oraz
+liniami `DRY-RUN: Would commit files to branch ...` i `Would ensure Dependency
+Dashboard`. Jeśli to widzisz, a na GitHubie nadal cisza, problem jest wyłącznie
+w zasięgu instalacji aplikacji.
+
+Aplikacja Renovate jest darmowa również dla repozytoriów prywatnych (plan Mend
+Renovate Community Cloud), więc prywatność tych repo nie jest przeszkodą. Limity
+planu darmowego to jedno zadanie równolegle na konto i przebieg co ~4 godziny —
+przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
 
 ## Dokumentacja i warstwa AI
 
