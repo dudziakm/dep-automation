@@ -4,13 +4,15 @@
   "lancuch": {
     "domyslny": "deepseek",
     "eskalacja": "deepseek-pro",
-    "zapas": "openrouter"
+    "zapas": ["openrouter", "kimi"],
+    "uwaga_format": "Każda rola przyjmuje nazwę providera albo listę nazw próbowanych po kolei. Dzięki temu dopisanie kolejnego zapasu jest zmianą danych, a nie kodu."
   },
   "domyslne_parametry": {
     "max_tokens": 4096,
     "temperature": 0,
     "timeout_s": 120,
-    "uwaga_max_tokens": "Tokeny myślenia liczą się jako output i są wliczane w max_tokens. Przy zbyt małym max_tokens odpowiedź wraca pusta z finish_reason=length — zmierzone empirycznie na DeepSeeku i na Gemini przez OpenRouter."
+    "uwaga_max_tokens": "Tokeny myślenia liczą się jako output i są wliczane w max_tokens. Przy zbyt małym max_tokens odpowiedź wraca pusta z finish_reason=length — zmierzone empirycznie na DeepSeeku, na Gemini przez OpenRouter i na Kimi.",
+    "uwaga_parametry": "Provider może nadpisać dowolny z tych parametrów własnym blokiem 'parametry'. To nie kosmetyka: Kimi odrzuca temperature inną niż 1 błędem HTTP 400, więc bez nadpisania nie odpowiedziałby ani razu."
   },
   "providers": {
     "deepseek": {
@@ -59,6 +61,25 @@
       "cennik_usd_za_1M": { "input": 0.375, "output": 1.875 },
       "darmowy_tier": false,
       "zrodlo_cennika": "https://openrouter.ai/api/v1/models"
+    },
+    "kimi": {
+      "base_url": "https://api.moonshot.ai/v1",
+      "model": "kimi-k2.7-code",
+      "secret": "KIMI_API_KEY",
+      "status": "aktywny",
+      "rola": "zapas",
+      "parametry": {
+        "temperature": 1,
+        "max_tokens": 16384
+      },
+      "notatka": "Drugi niezależny zapas, po OpenRouterze. Trzeci dostawca i trzeci klucz w łańcuchu, więc awaria DeepSeeka ani OpenRoutera go nie dotyczy. Model wyspecjalizowany pod kod — w cenie modelu ogólnego kimi-k2.6 (identyczne 0,95/4,00), więc specjalizacja nic nie kosztuje. Host globalny api.moonshot.ai; api.moonshot.cn odrzuca ten klucz kodem 401. Dwa wymuszone nadpisania parametrów: temperature musi być 1 (inna wartość to HTTP 400) i max_tokens musi być wyższe niż domyślne 4096, bo przy 4096 odpowiedź potrafi wyjść pusta z finish_reason=length — zmierzone. Konto jest na najniższym progu limitów (RPM 3, współbieżność 1), co jest osobnym powodem, żeby był zapasem, a nie domyślnym.",
+      "cennik_usd_za_1M": {
+        "input_cache_hit": 0.19,
+        "input_cache_miss": 0.95,
+        "output": 4.0
+      },
+      "darmowy_tier": false,
+      "zrodlo_cennika": "https://platform.kimi.ai/docs/pricing/chat-k27-code"
     },
     "gemini-flash": {
       "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",

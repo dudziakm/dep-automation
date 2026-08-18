@@ -48,34 +48,66 @@ jobs:
             exit 1
           fi
 
+          # Skrypt trzyma łańcuch jako listę rozdzieloną spacjami, więc nazwa
+          # providera z białym znakiem rozjechałaby go po cichu.
+          zle_nazwy=$(jq -r '.providers | keys[] | select(test("\\s"))' ai/providers.json)
+          if [ -n "$zle_nazwy" ]; then
+            echo "::error file=ai/providers.json::nazwy providerow nie moga zawierac bialych znakow: $zle_nazwy"
+            exit 1
+          fi
+
           # Łańcuch nie może wskazywać na providera, którego nie ma, ani na
           # takiego, który jest wyłączony — inaczej domyślne wywołanie poszłoby
           # do providera bez klucza i wywróciłoby się dopiero w locie.
+          # Rola to nazwa albo lista nazw, więc każdą spłaszczamy.
           for rola in domyslny eskalacja zapas; do
-            ref=$(jq -r ".lancuch.${rola} // empty" ai/providers.json)
-            [ -n "$ref" ] || continue
-            if ! jq -e --arg r "$ref" '.providers | has($r)' ai/providers.json > /dev/null; then
-              echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na nieistniejacego providera '$ref'"
-              exit 1
-            fi
-            pstatus=$(jq -r --arg r "$ref" '.providers[$r].status' ai/providers.json)
-            if [ "$pstatus" != "aktywny" ]; then
-              echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na '$ref', ktory ma status '$pstatus' zamiast 'aktywny'"
-              exit 1
-            fi
+            refs=$(jq -r --arg r "$rola" \
+              '[.lancuch[$r]] | flatten | map(select(type == "string" and . != "")) | .[]' ai/providers.json)
+            [ -n "$refs" ] || continue
+            for ref in $refs; do
+              if ! jq -e --arg r "$ref" '.providers | has($r)' ai/providers.json > /dev/null; then
+                echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na nieistniejacego providera '$ref'"
+                exit 1
+              fi
+              pstatus=$(jq -r --arg r "$ref" '.providers[$r].status' ai/providers.json)
+              if [ "$pstatus" != "aktywny" ]; then
+                echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na '$ref', ktory ma status '$pstatus' zamiast 'aktywny'"
+                exit 1
+              fi
+            done
           done
 
           # Provider spoza łańcucha (np. Gemini) ma prawo być wyłączony, ale nie
           # ma prawa udawać aktywnego — status 'aktywny' poza łańcuchem znaczy,
           # że ktoś zapomniał go dopisać do łańcucha albo przełączyć.
           osierocone=$(jq -r '
-            [.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas] as $chain
+            ([.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas]
+             | flatten
+             | map(select(type == "string"))) as $chain
             | .providers
             | to_entries[]
-            | select(.value.status == "aktywny" and ([.key] | inside($chain)) == false)
-            | .key' ai/providers.json)
+            | select(.value.status == "aktywny")
+            | .key
+            | . as $nazwa
+            | select(($chain | index($nazwa)) == null)' ai/providers.json)
           if [ -n "$osierocone" ]; then
             echo "::error file=ai/providers.json::providerzy ze statusem 'aktywny' poza lancuchem: $osierocone"
+            exit 1
+          fi
+
+          # Nadpisania parametrów trafiają do zapytania przez jq --argjson, więc
+          # wartość nieliczbowa wywróciłaby wywołanie dopiero w locie.
+          zle_parametry=$(jq -r '
+            .providers
+            | to_entries[]
+            | select(.value.parametry != null)
+            | .key as $k
+            | .value.parametry
+            | to_entries[]
+            | select((.key | test("^(max_tokens|temperature)$")) and (.value | type) != "number")
+            | "\($k).\(.key)"' ai/providers.json)
+          if [ -n "$zle_parametry" ]; then
+            echo "::error file=ai/providers.json::nadpisania parametrow musza byc liczbami: $zle_parametry"
             exit 1
           fi
 
