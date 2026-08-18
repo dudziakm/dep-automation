@@ -67,7 +67,11 @@ Polityka aktualizacji zależności mieszka w dudziakm/dep-automation.
 Warstwa: $preset. Automerge na tym etapie wyłączony — najpierw chcemy
 zobaczyć, ile i jakich PR-ów bot generuje."
     git push -q -u origin "$BRANCH"
-    gh pr create --base "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)" \
+    # --head jawnie: po sklonowaniu przez 'gh repo clone' gh nie rozpoznaje
+    # swiezo wypchnietej galezi i przerywa z "you must first push the current
+    # branch to a remote".
+    gh pr create --head "$BRANCH" \
+      --base "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)" \
       --title "chore: podłącz repo pod centralne presety Renovate" \
       --body "Dodaje \`renovate.json\` wskazujący na warstwę \`$preset\` w [dudziakm/dep-automation](https://github.com/$OWNER/dep-automation).
 
