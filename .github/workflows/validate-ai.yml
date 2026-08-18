@@ -22,7 +22,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v7, nie v4: v4 działa, ale runner zgłasza ostrzeżenie o wycofaniu
+      # Node.js 20. Szablon w ai/templates/ też jest na v7 — jedna wersja w
+      # całej warstwie.
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 

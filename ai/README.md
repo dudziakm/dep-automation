@@ -514,7 +514,8 @@ Cały łańcuch po zmianie na DeepSeeka został przejechany na żywo:
 | Endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` istnieje i odpowiada | tak — z nieprawidłowym kluczem zwraca HTTP 400 „Please pass a valid API key", czyli host i ścieżka są poprawne |
 | Kody wyjścia 1, 3 i 4 | wywołane celowo i zgodne z dokumentacją powyżej |
 | Tokeny myślenia zjadają `max_tokens` | zmierzone na obu modelach DeepSeeka i na Gemini przez OpenRouter — tabela wyżej |
-| Nowe reguły w `validate-ai.yml` łapią regresję | test kontrolny: trzy celowo zepsute konfiguracje (domyślny na wyłączonego, aktywny poza łańcuchem, literówka w nazwie) dały czerwień, stan faktyczny zielono |
+| Nowe reguły w `validate-ai.yml` łapią regresję | test kontrolny na trzech celowo zepsutych konfiguracjach (domyślny na wyłączonego, aktywny poza łańcuchem, literówka w nazwie) — każda dała czerwień, stan faktyczny zielono |
+| To samo **w prawdziwym CI**, nie tylko lokalnie | gałąź tymczasowa z domyślnym providerem wskazującym na wyłączone Gemini: przebieg `validate ai layer` zakończył się porażką z adnotacją „lancuch.domyslny wskazuje na 'gemini-flash', ktory ma status 'wyłączony' zamiast 'aktywny'". Gałąź usunięta po teście. |
 | Brak sekretów Actions na poziomie konta osobistego | `GET /user/actions/secrets` → **404** (endpoint nie istnieje), `GET /user/codespaces/secrets` → **403** (istnieje, brak zakresu). Konto `dudziakm`: `type=User`, `GET /user/orgs` → pusta lista |
 | `reasoning_effort: "none"` / wyłączenie myślenia dla Gemini 3 | **nie działa** — OpenRouter odpowiada HTTP 400 „Reasoning is mandatory for this endpoint and cannot be disabled", co zgadza się z dokumentacją Google |
 
