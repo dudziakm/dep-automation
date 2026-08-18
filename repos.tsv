@@ -1,0 +1,102 @@
+repo	ekosystem	aktywnosc	preset
+coachingDocs	js	active	js
+playwright-lum-project-cypress	js	active	js
+playwrightMacka	js	active	js
+globalsQA-banking	js	active	js
+testPwSetupEnv	js	active	js
+testPwSetup	js	active	js
+playwright-lum-project	js	active	js
+code-reviewer	js	active	js
+testBasketPw	js	active	js
+aws-courses	none	active	skip (brak manifestow)
+3rd-devs-my	-	-	skip (wykluczone)
+web-ideas	js	active	js
+todo_bmad	js	active	js
+CoachHomePage	js	active	js
+jit-old-cypress	js	active	js
+rag-course-guide	js	active	js
+learnPython	mixed	active	mixed
+ice_breaker	other	active	skip (poza zakresem js/jvm)
+api_ai_tracker	js	active	js
+nord-fjord-rag-guide	js	active	js
+PicsImprove	js	active	js
+IonoTestsMichal	jvm	active	jvm
+IonoTestsAhmad	jvm	active	jvm
+mdm-cypress	js	active	js
+cypressDemo	js	active	js
+10xCardsAstro	-	-	skip (wykluczone)
+ai-concept-compass-greenfield	js	active	js
+cypressTodo	js	active	js
+openReel	js	active	js
+cypress-play	js	active	js
+Lodgify-Automation-QA-Test	js	active	js
+aidevsApiTasks	js	active	js
+ai-concept-compass	js	active	js
+llm-building	other	active	skip (poza zakresem js/jvm)
+fixerTests	jvm	active	jvm
+jsonplaceholderApiTest	jvm	active	jvm
+langchain_experiments	other	active	skip (poza zakresem js/jvm)
+vapeFullyTests	js	active	js
+anthropic_training	other	active	skip (poza zakresem js/jvm)
+SeleniumCsharpPlayground	other	active	skip (poza zakresem js/jvm)
+AutoTest	jvm	active	jvm
+playwrightDevContainer	js	active	js
+globalsQA-banking-VS	js	active	js
+PwSetupLinter	js	active	js
+xm-test	other	active	skip (poza zakresem js/jvm)
+etsyTests	jvm	active	jvm
+vapeFullyTestsFinal	js	active	js
+tobaccoBasketPw	js	active	js
+qa_ai_intro_JZ	none	active	skip (brak manifestow)
+djhljdsajflksdjaflk-ds	-	-	skip (puste repo)
+dwthon-2026-openclaw	none	active	skip (brak manifestow)
+usefull_code_mics	none	active	skip (brak manifestow)
+dwthon-2026-bielik	none	active	skip (brak manifestow)
+rag-testing-ragas-deepeval-python	-	-	skip (fork)
+ytvideo	none	active	skip (brak manifestow)
+advent_of_code	none	active	skip (brak manifestow)
+bingAiTests	js	active	js
+generate_ebook	none	active	skip (brak manifestow)
+awesome-ai-apps	-	-	skip (fork)
+Experimenting	-	-	skip (puste repo)
+cypress-example-kitchensink	-	-	skip (fork)
+agents-towards-production	-	-	skip (fork)
+CodeSnippets	none	stale	skip (brak manifestow)
+skills-getting-started-with-github-copilot2	other	stale	skip (poza zakresem js/jvm)
+my10xCards	none	stale	skip (brak manifestow)
+ai-rules-builder	-	-	skip (fork)
+skills-getting-started-with-github-copilot	other	stale	skip (poza zakresem js/jvm)
+mdm-selenium	jvm	stale	silent
+jit-test-examples	js	stale	silent
+course-gda-java	mixed	stale	silent
+sapFTests	js	stale	silent
+fun-with-actions	none	stale	skip (brak manifestow)
+printify-sdet-hw	-	-	skip (fork)
+assignment-1	-	-	skip (fork)
+MadridHouses	jvm	stale	silent
+homepage	none	stale	skip (brak manifestow)
+gatlingdemo	-	-	skip (fork)
+katacoda-scenarios	none	stale	skip (brak manifestow)
+circleci-orb	-	-	skip (fork)
+BlockChainNet	other	stale	skip (poza zakresem js/jvm)
+Library	none	stale	skip (brak manifestow)
+automationPracticeTests	jvm	stale	silent
+restTests	jvm	stale	silent
+BankingWithBDD	jvm	stale	silent
+geb-intro	-	-	skip (fork)
+selenideTests	jvm	stale	silent
+SelCond	jvm	stale	silent
+SelCondGradle	jvm	stale	silent
+jsjquery	none	stale	skip (brak manifestow)
+SeleniumTraining	other	stale	skip (poza zakresem js/jvm)
+Protractor	none	stale	skip (brak manifestow)
+PageObjectTestsCsharp	other	stale	skip (poza zakresem js/jvm)
+techradar	-	-	skip (fork)
+AutomateThePlanet	-	-	skip (fork)
+TKB	none	stale	skip (brak manifestow)
+free-programming-books	-	-	skip (fork)
+TestowanieOprogramowania	-	-	skip (fork)
+syringe	js	stale	silent
+PageObjectsTutorial	jvm	stale	silent
+json-server	-	-	skip (fork)
+SpecDriver	-	-	skip (fork)

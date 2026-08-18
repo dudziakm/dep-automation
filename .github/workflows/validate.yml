@@ -1,0 +1,43 @@
+name: validate presets
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Walidator klasyfikuje plik po nazwie, a nazwy presetow (js.json itd.)
+      # nie sa mu znane. Kopiujemy kazdy pod renovate.json i walidujemy osobno.
+      - name: renovate-config-validator
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in default.json js.json jvm.json mixed.json silent.json; do
+            echo "::group::$f"
+            rm -rf /tmp/v && mkdir -p /tmp/v && cp "$f" /tmp/v/renovate.json
+            if (cd /tmp/v && npx --yes --package renovate@latest \
+                 renovate-config-validator --strict renovate.json); then
+              echo "$f OK"
+            else
+              echo "::error file=$f::walidacja nieudana"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      - name: shellcheck skryptow
+        run: shellcheck scripts/*.sh

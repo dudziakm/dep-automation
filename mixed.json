@@ -1,0 +1,9 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Repo z manifestami JS i JVM naraz. Obie warstwy, reguly obu ekosystemow sie nie nachodza, bo selektory sa rozlaczne.",
+
+  "extends": [
+    "github>dudziakm/dep-automation:js",
+    "github>dudziakm/dep-automation:jvm"
+  ]
+}

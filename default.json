@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Baza dla wszystkich repo dudziakm. Faza 2: same PR-y, automerge wyłączony.",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits"
+  ],
+
+  "dependencyDashboard": true,
+  "dependencyDashboardReportAbandonment": true,
+  "abandonmentThreshold": "18 months",
+
+  "minimumReleaseAge": "7 days",
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "internalChecksFilter": "strict",
+  "prCreation": "not-pending",
+
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+
+  "automerge": false,
+  "platformAutomerge": false,
+  "ignoreTests": false,
+  "internalChecksAsSuccess": false,
+
+  "separateMultipleMajor": true,
+
+  "osvVulnerabilityAlerts": true,
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "minimumReleaseAge": null,
+    "automerge": false,
+    "labels": ["security"]
+  },
+
+  "packageRules": [
+    {
+      "description": "Każdy major wymaga ręcznej zgody z dashboardu.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Akcje GitHuba grupowo; przypięcie do SHA daje config:recommended.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    }
+  ]
+}

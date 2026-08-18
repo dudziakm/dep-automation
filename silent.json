@@ -1,0 +1,10 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Repo archiwalne: pełna widoczność, zero kosztu. Renovate liczy aktualizacje i wypełnia dashboard, ale nie tworzy ani branchy, ani PR-ów.",
+
+  "extends": ["github>dudziakm/dep-automation"],
+
+  "mode": "silent",
+  "dependencyDashboard": true,
+  "dependencyDashboardReportAbandonment": true
+}

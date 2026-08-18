@@ -1,0 +1,81 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>dudziakm/dep-automation"],
+
+  "description": "Warstwa JS/TS/Node. Nakłada się na default.json.",
+
+  "packageRules": [
+    {
+      "description": "Zakresy aktualizujemy przez lockfile, a wydania filtrujemy po engines.node. Zamkniete w managerze npm, zeby preset dzialal tez w repo mieszanym (JS + JVM) i nie dotykal zaleznosci Mavena/Gradle'a.",
+      "matchManagers": ["npm"],
+      "rangeStrategy": "update-lockfile",
+      "constraintsFiltering": "strict"
+    },
+    {
+      "description": "Narzędzia, które same są konfiguracją — major zawsze przez człowieka, jeden PR na major.",
+      "matchPackageNames": [
+        "eslint",
+        "typescript",
+        "vite",
+        "vitest",
+        "@vitejs/plugin-react",
+        "react",
+        "react-dom",
+        "astro",
+        "cypress",
+        "@playwright/test",
+        "playwright",
+        "node",
+        "@types/node"
+      ],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Playwright rusza się jako jedna całość — paczka, core i obraz dockerowy muszą się zgadzać.",
+      "matchPackageNames": [
+        "@playwright/test",
+        "playwright",
+        "playwright-core",
+        "mcr.microsoft.com/playwright"
+      ],
+      "groupName": "playwright"
+    },
+    {
+      "description": "Cypress i jego wtyczki też — wtyczki mają wąskie peer na wersję cypressa.",
+      "matchPackageNames": [
+        "cypress",
+        "cypress-real-events",
+        "cypress-on-fix",
+        "@badeball/cypress-cucumber-preprocessor",
+        "@bahmutov/cypress-esbuild-preprocessor",
+        "@cypress/webpack-preprocessor",
+        "cypress-mochawesome-reporter",
+        "@shelex/cypress-allure-plugin"
+      ],
+      "groupName": "cypress"
+    },
+    {
+      "description": "Tailwind razem z pluginem do bundlera.",
+      "matchPackageNames": [
+        "tailwindcss",
+        "@tailwindcss/vite",
+        "@tailwindcss/postcss"
+      ],
+      "groupName": "tailwind"
+    },
+    {
+      "description": "TypeScript bez semver dla typów — minor potrafi zepsuć kompilację, więc długa kwarantanna.",
+      "matchPackageNames": ["typescript"],
+      "minimumReleaseAge": "21 days",
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Blok overrides jest polityką bezpieczeństwa, nie zależnością — Renovate go nie rusza.",
+      "matchDepTypes": ["overrides", "resolutions"],
+      "enabled": false
+    }
+  ]
+}

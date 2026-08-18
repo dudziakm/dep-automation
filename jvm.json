@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>dudziakm/dep-automation"],
+
+  "description": "Warstwa JVM (Maven/Gradle). Nakłada się na default.json.",
+
+  "minimumReleaseAge": "7 days",
+
+  "packageRules": [
+    {
+      "description": "Biblioteki testowe: najmniejsze ryzyko, bo mvn verify realnie je wykonuje.",
+      "matchPackageNames": [
+        "org.junit{/,}**",
+        "org.mockito{/,}**",
+        "org.assertj{/,}**",
+        "org.testcontainers{/,}**",
+        "io.rest-assured{/,}**"
+      ],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "biblioteki testowe",
+      "minimumReleaseAge": "5 days"
+    },
+    {
+      "description": "Wtyczki buildu Mavena osobną grupą.",
+      "matchPackageNames": [
+        "org.apache.maven.plugins{/,}**",
+        "org.jacoco{/,}**"
+      ],
+      "groupName": "wtyczki maven"
+    },
+    {
+      "description": "Wrapper Gradle'a rusza gradlew i jar — dłuższa kwarantanna, zawsze człowiek.",
+      "matchDatasources": ["gradle-version"],
+      "minimumReleaseAge": "14 days",
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Nie ruszamy zależności, których wersją rządzi BOM. Renovate nie uruchamia Mavena, więc nie widzi, że Maven i tak zresetuje wersję do tej z BOM-a — powstałby PR, który przechodzi build i kłamie o zawartości.",
+      "matchPackageNames": [
+        "com.fasterxml.jackson{/,}**",
+        "org.slf4j{/,}**",
+        "ch.qos.logback{/,}**",
+        "io.micrometer{/,}**",
+        "org.apache.tomcat{/,}**",
+        "io.netty{/,}**",
+        "org.hibernate{/,}**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Parent i BOM Spring Boota rusza się jako jedna całość — wtedy build jest realną bramką.",
+      "matchPackageNames": ["org.springframework.boot{/,}**"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "spring-boot",
+      "minimumReleaseAge": "5 days"
+    }
+  ]
+}
