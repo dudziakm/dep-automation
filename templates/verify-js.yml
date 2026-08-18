@@ -96,11 +96,24 @@ jobs:
               ;;
           esac
 
+      # Wlasny skrypt repo ma pierwszenstwo przed golym tsc. Frameworki generuja
+      # typy dopiero w swoim kroku sync (Astro, Next, SvelteKit), wiec samo
+      # 'tsc --noEmit' zglasza brakujace moduly wirtualne i daje falszywa czerwien.
       - name: Typecheck
         run: |
           set -euo pipefail
+          script=$(node -e "const s=require('./package.json').scripts||{};process.stdout.write(s.typecheck?'typecheck':(s['type-check']?'type-check':''))")
+          if [ -n "$script" ]; then
+            echo "Uzywam skryptu repo: $script"
+            case "${{ steps.pm.outputs.mgr }}" in
+              pnpm) pnpm run "$script" ;;
+              yarn) yarn run "$script" ;;
+              npm)  npm run "$script" ;;
+            esac
+            exit 0
+          fi
           if [ ! -f tsconfig.json ]; then
-            echo "Brak tsconfig.json — pomijam."; exit 0
+            echo "Brak skryptu typecheck i brak tsconfig.json — pomijam."; exit 0
           fi
           if ! node -e "const p=require('./package.json');const d={...p.dependencies,...p.devDependencies};process.exit(d.typescript?0:1)"; then
             echo "typescript nie jest zalezoscia repo — pomijam, zeby nie sciagac losowej wersji."; exit 0
@@ -128,8 +141,10 @@ jobs:
         run: |
           set -euo pipefail
           ts=nie
-          if [ -f tsconfig.json ] && node -e "const p=require('./package.json');const d={...p.dependencies,...p.devDependencies};process.exit(d.typescript?0:1)"; then
-            ts=tak
+          if node -e "const s=require('./package.json').scripts||{};process.exit(s.typecheck||s['type-check']?0:1)"; then
+            ts="tak (skrypt repo)"
+          elif [ -f tsconfig.json ] && node -e "const p=require('./package.json');const d={...p.dependencies,...p.devDependencies};process.exit(d.typescript?0:1)"; then
+            ts="tak (tsc --noEmit)"
           fi
           bd=nie
           if node -e "const p=require('./package.json');process.exit(p.scripts&&p.scripts.build?0:1)"; then
@@ -148,7 +163,7 @@ jobs:
               echo "> **Uwaga:** w tym katalogu bramka sprawdza wylacznie instalacje."
               echo "> Nie traktuj zielonego wyniku jako dowodu, ze aktualizacja niczego nie zepsula."
             fi
-            if [ "$ts" = tak ]; then
+            if [ "$ts" = "tak (tsc --noEmit)" ]; then
               echo ""
               echo "> \`tsc --noEmit\` przy \`skipLibCheck: true\` (typowe ustawienie) nie wykrywa"
               echo "> wiekszosci regresji w typach samych zaleznosci — tylko te, ktore wychodza"
