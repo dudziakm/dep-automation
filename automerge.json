@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Opt-in automerge layer. Add it only to repositories that run the verify gate. Renovate merges a branch once its status is green, and a repository with no checks has nothing to fail - there the same setting would merge blind. Extend it after the ecosystem preset so these rules win, and note that the closing rules below deliberately re-assert every exclusion the ecosystem preset makes.",
+
+  "packageRules": [
+    {
+      "description": "Dev dependencies carry no runtime risk and the gate installs and builds them.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Runtime dependencies: patch only. A minor can change behaviour that install and build never exercise.",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "GitHub Actions are pinned to a digest by config:recommended, so the diff is a hash and the workflow itself is the test.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Never automerge a major, whatever the ecosystem preset said.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Tools that are themselves configuration stay manual. Repeated here because this preset is applied last and would otherwise override the same exclusion in the ecosystem layer.",
+      "matchPackageNames": [
+        "eslint",
+        "typescript",
+        "vite",
+        "vitest",
+        "@vitejs/plugin-react",
+        "react",
+        "react-dom",
+        "astro",
+        "cypress",
+        "@playwright/test",
+        "playwright",
+        "playwright-core",
+        "node",
+        "@types/node"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Gradle wrapper rewrites gradlew and the wrapper jar, so it stays manual here too.",
+      "matchDatasources": ["gradle-version"],
+      "automerge": false
+    }
+  ],
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on monday"]
+  },
+
+  "vulnerabilityAlerts": {
+    "automerge": false,
+    "labels": ["security"]
+  }
+}
