@@ -104,6 +104,12 @@ jq -e . "$CONFIG" >/dev/null 2>&1 || { err "konfiguracja nie jest poprawnym JSON
 
 cfg() { jq -r "$1" "$CONFIG"; }
 
+role_members() {
+  # Rola w lancuchu to nazwa providera albo lista nazw probowanych po kolei.
+  # Oba zapisy sa rownowazne, wiec dopisanie kolejnego zapasu nie rusza kodu.
+  cfg "[.lancuch[\"$1\"]] | flatten | map(select(type == \"string\" and . != \"\")) | .[]"
+}
+
 # --- tryby informacyjne ---------------------------------------------------
 
 table() {
@@ -123,6 +129,18 @@ fi
 # --- budowa lancucha providerow ------------------------------------------
 
 chain=""
+
+add_to_chain() {
+  # Dopisuje providerow na koniec lancucha, pomijajac duplikaty. Lancuch trzymamy
+  # jako liste rozdzielona spacjami, wiec nazwa providera nie moze zawierac bialych
+  # znakow - pilnuje tego osobna regula w validate-ai.yml.
+  local p
+  for p in "$@"; do
+    [ -n "$p" ] || continue
+    case " $chain " in *" $p "*) ;; *) chain="${chain:+$chain }$p" ;; esac
+  done
+}
+
 if [ -n "$FORCE_PROVIDER" ]; then
   cfg '.providers | keys[]' | grep -qx -- "$FORCE_PROVIDER" ||
     { err "provider '$FORCE_PROVIDER' nie istnieje w $CONFIG"; exit 1; }
@@ -131,20 +149,21 @@ if [ -n "$FORCE_PROVIDER" ]; then
     log "UWAGA: provider '$FORCE_PROVIDER' ma w konfiguracji status 'wyłączony'. Uzywam go, bo zazadano go jawnie przez --provider."
   fi
 else
-  domyslny=$(cfg '.lancuch.domyslny // empty')
-  eskalacja=$(cfg '.lancuch.eskalacja // empty')
-  zapas=$(cfg '.lancuch.zapas // empty')
+  domyslny=$(role_members domyslny)
+  eskalacja=$(role_members eskalacja)
+  zapas=$(role_members zapas)
   [ -n "$domyslny" ] || { err "brak .lancuch.domyslny w $CONFIG"; exit 1; }
+  # Dzielenie na slowa ponizej jest celowe: role_members zwraca liste nazw.
   if [ "$START_AT" = "eskalacja" ] && [ -n "$eskalacja" ]; then
-    chain="$eskalacja"
+    # shellcheck disable=SC2086
+    add_to_chain $eskalacja
   else
-    chain="$domyslny"
+    # shellcheck disable=SC2086
+    add_to_chain $domyslny
   fi
   if [ "$NO_ESCALATE" -eq 0 ]; then
-    for extra in "$eskalacja" "$zapas"; do
-      [ -n "$extra" ] || continue
-      case " $chain " in *" $extra "*) ;; *) chain="$chain $extra" ;; esac
-    done
+    # shellcheck disable=SC2086
+    add_to_chain $eskalacja $zapas
   fi
 fi
 
@@ -152,6 +171,16 @@ secret_name_of() { cfg ".providers[\"$1\"].secret // empty"; }
 status_of() { cfg ".providers[\"$1\"].status // empty"; }
 model_of() { cfg ".providers[\"$1\"].model // empty"; }
 base_url_of() { cfg ".providers[\"$1\"].base_url // empty"; }
+
+param_of() {
+  # Parametr providera, a gdy go nie podano - domyslny z konfiguracji.
+  # Providerzy roznia sie tym, co w ogole przyjmuja: Kimi odrzuca temperature
+  # inna niz 1 kodem 400, wiec to musi byc dana, a nie stala w kodzie.
+  local value
+  value=$(cfg ".providers[\"$1\"].parametry.$2 // empty")
+  [ -n "$value" ] || value=$(cfg ".domyslne_parametry.$2 // empty")
+  printf '%s' "$value"
+}
 
 secret_present() {
   # 0 gdy sekret jest ustawiony i niepusty. Wartosci nigdy nie zwracamy.
@@ -193,13 +222,15 @@ else
 fi
 [ -n "$PROMPT" ] || { err "prompt jest pusty"; exit 1; }
 
-[ -n "$MAX_TOKENS" ] || MAX_TOKENS=$(cfg '.domyslne_parametry.max_tokens // 4096')
-TEMPERATURE=$(cfg '.domyslne_parametry.temperature // 0')
+# max_tokens i temperature rozstrzygamy dopiero per provider, bo kazdy moze miec
+# wlasne. Flaga --max-tokens bije jednak wszystkich.
 TIMEOUT_S=$(cfg '.domyslne_parametry.timeout_s // 120')
 
-case "$MAX_TOKENS" in
-  ''|*[!0-9]*) err "--max-tokens musi byc liczba calkowita, jest: $MAX_TOKENS"; exit 1 ;;
-esac
+if [ -n "$MAX_TOKENS" ]; then
+  case "$MAX_TOKENS" in
+    *[!0-9]*) err "--max-tokens musi byc liczba calkowita, jest: $MAX_TOKENS"; exit 1 ;;
+  esac
+fi
 if [ -n "$REASONING_EFFORT" ]; then
   case "$REASONING_EFFORT" in
     minimal|low|medium|high) ;;
@@ -227,11 +258,15 @@ LAST_REASON=""
 try_provider() {
   local provider="$1"
   local model base_url secret_name key payload body http finish content errmsg
-  local ptokens ctokens rtokens
+  local ptokens ctokens rtokens max_tokens temperature
 
   model="${OVERRIDE_MODEL:-$(model_of "$provider")}"
   base_url=$(base_url_of "$provider")
   secret_name=$(secret_name_of "$provider")
+  max_tokens="${MAX_TOKENS:-$(param_of "$provider" max_tokens)}"
+  temperature=$(param_of "$provider" temperature)
+  [ -n "$max_tokens" ] || max_tokens=4096
+  [ -n "$temperature" ] || temperature=0
 
   if [ -z "$model" ] || [ -z "$base_url" ] || [ -z "$secret_name" ]; then
     LAST_REASON="niekompletny wpis providera '$provider' w konfiguracji"
@@ -257,8 +292,8 @@ try_provider() {
     --arg model "$model" \
     --arg system "$SYSTEM_PROMPT" \
     --arg prompt "$PROMPT" \
-    --argjson max_tokens "$MAX_TOKENS" \
-    --argjson temperature "$TEMPERATURE" \
+    --argjson max_tokens "$max_tokens" \
+    --argjson temperature "$temperature" \
     --arg effort "$REASONING_EFFORT" \
     '{
        model: $model,
@@ -275,7 +310,7 @@ try_provider() {
     return 1
   }
 
-  log "-> provider=${provider} model=${model} host=$(printf '%s' "$base_url" | sed -E 's#^https?://([^/]+).*#\1#')"
+  log "-> provider=${provider} model=${model} host=$(printf '%s' "$base_url" | sed -E 's#^https?://([^/]+).*#\1#') max_tokens=${max_tokens} temperature=${temperature}"
 
   # Adres i naglowek autoryzacji ida przez stdin, zeby klucz nie pojawil sie
   # w liscie procesow. printf jest wbudowany w basha, wiec tez nie tworzy argv.
@@ -319,9 +354,9 @@ if [ "$MODE" = "dryrun" ]; then
   log "Lancuch prob: $chain"
   for p in $chain; do
     if secret_present "$p"; then avail="sekret obecny"; else avail="SEKRET BRAK - provider bylby pominiety"; fi
-    log "  $p  model=${OVERRIDE_MODEL:-$(model_of "$p")}  base_url=$(base_url_of "$p")  [$avail]"
+    log "  $p  model=${OVERRIDE_MODEL:-$(model_of "$p")}  base_url=$(base_url_of "$p")  max_tokens=${MAX_TOKENS:-$(param_of "$p" max_tokens)}  temperature=$(param_of "$p" temperature)  [$avail]"
   done
-  log "max_tokens=${MAX_TOKENS} temperature=${TEMPERATURE} timeout=${TIMEOUT_S}s reasoning_effort=${REASONING_EFFORT:-domyslny}"
+  log "timeout=${TIMEOUT_S}s reasoning_effort=${REASONING_EFFORT:-domyslny}"
   log "Prompt: $(printf '%s' "$PROMPT" | wc -c | tr -d ' ') bajtow, brak wywolania sieciowego."
   exit 0
 fi
