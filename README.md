@@ -242,3 +242,16 @@ przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
 Agent AI **nigdy nie jest bramką**: może wyłącznie zaproponować zmianę, a o tym,
 czy cokolwiek wjedzie na `main`, decydują deterministyczne checki CI i ocena
 statusu przez Renovate.
+
+## Excluded repositories (hard rule, owner policy 2026-08-18)
+
+The repositories listed in [`EXCLUDED-REPOS.txt`](EXCLUDED-REPOS.txt) are
+permanently out of scope for dependency automation until the owner officially
+re-permits them: no Renovate onboarding, no verify gate, no automerge, no
+override or security PRs, no commits or merges.
+
+This currently covers `ai-concept-compass`, `ai-concept-compass-greenfield`,
+`10xCardsAstro`, `my10xCards`, `ai-rules-builder`, and the "10x devs" / "concept
+AI" repositories in general. The exclusion is the owner's final decision after
+an earlier temporary opt-in was reversed; a generic "do all repos" instruction
+does not override it.

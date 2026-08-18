@@ -899,3 +899,21 @@ Separately rejected hypothesis for `3rd-devs-my`: `npm ci` was failing there on
 compilation of native `canvas` 2.11.2 under node 24 / darwin arm64, i.e. on my
 machine, not in the repo — under `--ignore-scripts` it installs 1516 packages and
 the build passes.
+
+## Excluded repositories (hard rule)
+
+Set by the owner on 2026-08-18 and binding until an explicit, official
+re-permission. These repositories must not receive any automation — Renovate
+onboarding, verify gate, automerge preset, or override/security PRs — and must
+not be committed to or merged:
+
+- `ai-concept-compass`
+- `ai-concept-compass-greenfield`
+- `10xCardsAstro`
+- `my10xCards`
+- `ai-rules-builder`
+
+Also covers the "10x devs" course repos and "concept AI" repos in general. The
+scope was reversed once (an earlier temporary opt-in of cards/rules/compass was
+withdrawn); this exclusion is the final state. The machine-readable list lives in
+`EXCLUDED-REPOS.txt` and the seeding scripts skip anything in it.

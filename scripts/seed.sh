@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+
+# Hard exclusion: never seed repos listed in EXCLUDED-REPOS.txt (owner policy 2026-08-18).
+EXCLUDE_FILE="$(dirname "$0")/../EXCLUDED-REPOS.txt"
+is_excluded() {
+  [ -f "$EXCLUDE_FILE" ] || return 1
+  grep -vE '^[[:space:]]*#' "$EXCLUDE_FILE" | grep -qx "$1"
+}
 # Zasiewa renovate.json do repo docelowych na gałęzi + PR.
 #
 #   ./scripts/seed.sh repos.tsv          # dry-run, tylko wypis
