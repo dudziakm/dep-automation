@@ -208,10 +208,12 @@ if [ -n "$REASONING_EFFORT" ]; then
 fi
 
 TMPDIR_RUN=$(mktemp -d "${TMPDIR:-/tmp}/ai-call.XXXXXX")
-# shellcheck disable=SC2329  # wywolywane przez trap ponizej
+# shellcheck disable=SC2329,SC2317  # wywolywane przez trap ponizej, nie wprost
 cleanup() {
+  # shellcheck disable=SC2317
   # Bez rm -rf: usuwamy tylko pliki, ktore sam tworze, i katalog po nich.
   rm -f -- "${TMPDIR_RUN}/payload.json" "${TMPDIR_RUN}/body.json" "${TMPDIR_RUN}/curl.err"
+  # shellcheck disable=SC2317
   rmdir -- "$TMPDIR_RUN" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
