@@ -72,6 +72,36 @@ w `playwright-lum-project-cypress`.
 Zostawiam włączone, bo baza OSV jest odpytywana lokalnie (bez limitów zapytań),
 ale traktuj to jako sygnał, nie gwarancję, i licz się ze zmianą zachowania.
 
+## Pułapka: walidator nie sprawdza zdalnych presetów
+
+`renovate-config-validator` **nie pobiera** presetów wskazanych przez `github>`.
+Config z celowo błędnym `github>dudziakm/dep-automation:nie-ma-takiego`
+przechodzi u niego jako poprawny (sprawdzone). Znaczy to, że zmiana nazwy pliku
+presetu nie zostałaby wyłapana przez walidację, a wysypałaby się dopiero u bota,
+w każdym repo naraz.
+
+Dlatego workflow ma osobny krok sprawdzający odniesienia między presetami po
+plikach. Pełne, prawdziwe rozwiązanie presetu daje tylko uruchomienie Renovate:
+
+```bash
+mkdir -p /tmp/rnvdry && cd /tmp/rnvdry
+cat > config.js <<'EOF'
+module.exports = {
+  platform: 'github',
+  repositories: ['dudziakm/testPwSetup'],
+  extends: ['github>dudziakm/dep-automation:js'],
+  requireConfig: 'optional',
+  dryRun: 'extract',
+};
+EOF
+RENOVATE_CONFIG_FILE=/tmp/rnvdry/config.js \
+RENOVATE_TOKEN="$(gh auth token)" GITHUB_COM_TOKEN="$(gh auth token)" \
+  npx --package renovate@latest renovate
+```
+
+Błędna nazwa daje wtedy `config-presets-invalid` i `Cannot find preset's
+package`.
+
 ## Skrypty
 
 ```bash

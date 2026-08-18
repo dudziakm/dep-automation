@@ -39,5 +39,31 @@ jobs:
           done
           exit $fail
 
+      # renovate-config-validator NIE pobiera zdalnych presetow: config z
+      # celowo blednym "github>owner/repo:nie-ma-takiego" przechodzi u niego
+      # jako poprawny. Zmiana nazwy pliku presetu przeszlaby wiec niezauwazona,
+      # a wysypalaby sie dopiero u bota. Dlatego sprawdzamy odniesienia sami.
+      - name: odniesienia miedzy presetami
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in default.json js.json jvm.json mixed.json silent.json; do
+            while read -r ref; do
+              [[ -z "$ref" ]] && continue
+              if [[ "$ref" == "github>dudziakm/dep-automation" ]]; then
+                target=default.json
+              else
+                target="${ref##*:}.json"
+              fi
+              if [[ -f "$target" ]]; then
+                echo "$f -> $ref (plik $target istnieje)"
+              else
+                echo "::error file=$f::preset '$ref' wskazuje na brakujacy plik $target"
+                fail=1
+              fi
+            done < <(jq -r '(.extends // [])[] | select(startswith("github>dudziakm/dep-automation"))' "$f")
+          done
+          exit $fail
+
       - name: shellcheck skryptow
         run: shellcheck scripts/*.sh
