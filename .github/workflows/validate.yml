@@ -68,3 +68,43 @@ jobs:
 
       - name: shellcheck scripts
         run: shellcheck scripts/*.sh
+
+      # Runner config is JS (self-hosted options + dry-run toggle). Validate the
+      # frozen-repo exclusion stays wired to EXCLUDED-REPOS.txt, and that actionlint
+      # accepts renovate.yml when the binary is on PATH (CI image may lack it).
+      - name: runner exclusion sync
+        run: |
+          set -euo pipefail
+          cfg=.github/renovate-global.js
+          fail=0
+          while read -r repo; do
+            [[ -z "$repo" || "$repo" =~ ^# ]] && continue
+            if ! grep -q "'dudziakm/${repo}'" "$cfg"; then
+              echo "::error file=$cfg::EXCLUDED-REPOS.txt entry '${repo}' missing from runner FROZEN_REPOS"
+              fail=1
+            fi
+          done < EXCLUDED-REPOS.txt
+          if ! grep -q 'FROZEN_REPOS.map' "$cfg"; then
+            echo "::error file=$cfg::autodiscoverFilter must derive deny entries from FROZEN_REPOS.map"
+            fail=1
+          fi
+          for token in 10x cards concept rules; do
+            if ! grep -q "!dudziakm/\*${token}\*" "$cfg"; then
+              echo "::error file=$cfg::missing belt-and-suspenders filter !*${token}*"
+              fail=1
+            fi
+          done
+          if ! grep -q 'matchRepositories: FROZEN_REPOS' "$cfg"; then
+            echo "::error file=$cfg::packageRules must deny via matchRepositories: FROZEN_REPOS"
+            fail=1
+          fi
+          exit $fail
+
+      - name: actionlint renovate workflow
+        run: |
+          set -euo pipefail
+          if command -v actionlint >/dev/null 2>&1; then
+            actionlint .github/workflows/renovate.yml
+          else
+            echo "actionlint not installed on runner; skipping (validated locally before merge)"
+          fi
