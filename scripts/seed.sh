@@ -7,17 +7,17 @@ is_excluded() {
   [ -f "$EXCLUDE_FILE" ] || return 1
   grep -vE '^[[:space:]]*#' "$EXCLUDE_FILE" | grep -qx "$1"
 }
-# Zasiewa renovate.json do repo docelowych na gałęzi + PR.
+# Seed renovate.json into target repos (branch + PR).
 #
-#   ./scripts/seed.sh repos.tsv          # dry-run, tylko wypis
-#   APPLY=1 ./scripts/seed.sh repos.tsv  # realnie tworzy gałąź i PR
-#   ONLY=nazwa1,nazwa2 APPLY=1 ...       # ogranicz do wybranych repo
+#   ./scripts/seed.sh repos.tsv          # dry-run, print only
+#   APPLY=1 ./scripts/seed.sh repos.tsv  # create branch + PR
+#   ONLY=name1,name2 APPLY=1 ...         # limit to selected repos
 #
-# Idempotentny: repo, które już ma renovate.json (lub .github/renovate.json
-# albo .renovaterc.json), jest pomijane.
+# Idempotent: repos that already have renovate.json (or .github/renovate.json
+# or .renovaterc.json) are skipped.
 set -euo pipefail
 
-TSV="${1:?podaj plik TSV z classify.sh}"
+TSV="${1:?provide TSV from classify.sh}"
 OWNER="${OWNER:-dudziakm}"
 BRANCH="${BRANCH:-chore/renovate-config}"
 APPLY="${APPLY:-0}"
@@ -26,25 +26,24 @@ WORK="${WORK:-/tmp/seed-renovate}"
 
 mkdir -p "$WORK"
 
-# Zabezpieczenie tozsamosci. Na maszynie z kilkoma kontami gh potrafi miec
-# aktywne inne konto niz sie wydaje, a wtedy push przechodzi (git ma wlasne
-# poswiadczenia), za to 'gh pr create' konczy sie "must be a collaborator" i
-# zostawia wypchniete galezie bez PR-ow. Lepiej stanac od razu.
+# Identity guard. On a machine with several gh accounts, a different user can be
+# active than expected: push still succeeds (git has its own credentials), but
+# 'gh pr create' fails with "must be a collaborator" and leaves orphan branches.
 me=$(gh api user --jq '.login' 2>/dev/null || true)
 if [[ "$me" != "$OWNER" ]]; then
-  echo "STOP: gh jest uwierzytelniony jako '${me:-nikt}', a OWNER to '$OWNER'." >&2
-  echo "      Ustaw GH_TOKEN dla wlasciwego konta, np.:" >&2
+  echo "STOP: gh is authenticated as '${me:-nobody}', but OWNER is '$OWNER'." >&2
+  echo "      Set GH_TOKEN for the right account, e.g.:" >&2
   echo "      export GH_TOKEN=\"\$(gh auth token --user $OWNER --hostname github.com)\"" >&2
   exit 2
 fi
 
 pr_body() {
   cat <<EOF
-Dodaje \`renovate.json\` wskazujący na warstwę \`$1\` w [dudziakm/dep-automation](https://github.com/$OWNER/dep-automation).
+Adds \`renovate.json\` pointing at the \`$1\` layer in [dudziakm/dep-automation](https://github.com/$OWNER/dep-automation).
 
-Config musi istnieć **przed** instalacją aplikacji Renovate — inaczej bot zrobi onboarding z gołym \`config:recommended\` i ominie tę politykę.
+The config must exist **before** installing the Renovate App — otherwise the bot onboards with bare \`config:recommended\` and bypasses this policy.
 
-Na tym etapie \`automerge\` jest wyłączony: najpierw chcemy zmierzyć, ile i jakich PR-ów bot generuje.
+Automerge is off at this stage: first we want to measure how many and which PRs the bot opens.
 EOF
 }
 
@@ -61,7 +60,7 @@ while IFS=$'\t' read -r name eco activity preset; do
     skipped=$((skipped+1)); continue
   fi
 
-  # Renovate czyta config tylko z gałęzi domyślnej.
+  # Renovate only reads config from the default branch.
   existing=""
   for f in renovate.json .renovaterc.json .github/renovate.json renovate.json5; do
     if gh api "repos/$OWNER/$name/contents/$f" --silent >/dev/null 2>&1; then
@@ -69,32 +68,32 @@ while IFS=$'\t' read -r name eco activity preset; do
     fi
   done
   if [[ -n "$existing" ]]; then
-    printf 'POMIJAM  %-32s ma juz %s\n' "$name" "$existing"
+    printf 'SKIP     %-32s already has %s\n' "$name" "$existing"
     skipped=$((skipped+1)); continue
   fi
 
   if [[ "$APPLY" != "1" ]]; then
-    printf 'ZASIALBYM %-31s preset=%-7s (%s, %s)\n' "$name" "$preset" "$eco" "$activity"
+    printf 'WOULD    %-31s preset=%-7s (%s, %s)\n' "$name" "$preset" "$eco" "$activity"
     seeded=$((seeded+1)); continue
   fi
 
-  # Galaz moze juz istniec po przerwanym przebiegu (push przechodzi wczesniej
-  # niz utworzenie PR-a). Wtedy nie klonujemy ponownie, tylko domykamy PR-a.
+  # Branch may already exist after an interrupted run (push happens before PR
+  # creation). In that case do not re-clone; just finish the PR.
   if gh api "repos/$OWNER/$name/branches/$BRANCH" --silent >/dev/null 2>&1; then
     open_pr=$(gh pr list --repo "$OWNER/$name" --head "$BRANCH" --state open \
                 --json number --jq '.[0].number // empty' 2>/dev/null || true)
     if [[ -n "$open_pr" ]]; then
-      printf 'POMIJAM  %-32s ma juz PR #%s\n' "$name" "$open_pr"
+      printf 'SKIP     %-32s already has PR #%s\n' "$name" "$open_pr"
       skipped=$((skipped+1)); continue
     fi
     base=$(gh api "repos/$OWNER/$name" --jq '.default_branch')
     if gh pr create --repo "$OWNER/$name" --head "$BRANCH" --base "$base" \
-         --title "chore: podłącz repo pod centralne presety Renovate" \
+         --title "chore: point repo at central Renovate presets" \
          --body "$(pr_body "$preset")" >/dev/null 2>&1; then
-      printf 'DOMKNIETE %-31s preset=%s (galaz juz byla)\n' "$name" "$preset"
+      printf 'CLOSED   %-31s preset=%s (branch already existed)\n' "$name" "$preset"
       seeded=$((seeded+1))
     else
-      printf 'BLAD     %-32s galaz jest, PR sie nie utworzyl\n' "$name"
+      printf 'FAIL     %-32s branch exists, PR was not created\n' "$name"
       failed=$((failed+1))
     fi
     continue
@@ -102,11 +101,11 @@ while IFS=$'\t' read -r name eco activity preset; do
 
   rm -rf "${WORK:?}/${name:?}"
   if ! gh repo clone "$OWNER/$name" "$WORK/$name" -- --depth 1 --quiet 2>/dev/null; then
-    printf 'BLAD     %-32s klon nie wyszedl\n' "$name"
+    printf 'FAIL     %-32s clone failed\n' "$name"
     failed=$((failed+1)); continue
   fi
 
-  # rc czytamy przez '|| rc=$?', bo przy set -e nieudany podshell przerwalby skrypt.
+  # Read rc via '|| rc=$?' because under set -e a failing subshell would abort.
   rc=0
   (
     cd "$WORK/$name"
@@ -118,31 +117,33 @@ while IFS=$'\t' read -r name eco activity preset; do
 }
 EOF
     git add renovate.json
-    git commit -q -m "chore: podłącz repo pod centralne presety Renovate
+    git commit -q -m "$(cat <<EOF
+chore: point repo at central Renovate presets
 
-Polityka aktualizacji zależności mieszka w dudziakm/dep-automation.
-Warstwa: $preset. Automerge na tym etapie wyłączony — najpierw chcemy
-zobaczyć, ile i jakich PR-ów bot generuje."
+Dependency-update policy lives in dudziakm/dep-automation.
+Layer: $preset. Automerge is off at this stage — first we want to see
+how many and which PRs the bot opens.
+EOF
+)"
     git push -q -u origin "$BRANCH"
-    # --head jawnie: po sklonowaniu przez 'gh repo clone' gh nie rozpoznaje
-    # swiezo wypchnietej galezi i przerywa z "you must first push the current
-    # branch to a remote".
+    # --head explicitly: after 'gh repo clone', gh does not recognise the freshly
+    # pushed branch and aborts with "you must first push the current branch".
     gh pr create --head "$BRANCH" \
       --base "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)" \
-      --title "chore: podłącz repo pod centralne presety Renovate" \
+      --title "chore: point repo at central Renovate presets" \
       --body "$(pr_body "$preset")" >/dev/null
   ) || rc=$?
   if [[ $rc -eq 0 ]]; then
-    printf 'ZASIANE  %-32s preset=%s\n' "$name" "$preset"
+    printf 'SEEDED   %-32s preset=%s\n' "$name" "$preset"
     seeded=$((seeded+1))
   else
-    printf 'BLAD     %-32s zasiew nie wyszedl (kod %d)\n' "$name" "$rc"
+    printf 'FAIL     %-32s seed failed (exit %d)\n' "$name" "$rc"
     failed=$((failed+1))
   fi
 
 done < "$TSV"
 
 echo
-printf 'Zasiane/do zasiewu: %d   pominiete: %d   bledy: %d\n' "$seeded" "$skipped" "$failed"
-[[ "$APPLY" != "1" ]] && echo 'To byl dry-run. Uruchom z APPLY=1, zeby realnie utworzyc PR-y.'
+printf 'Seeded/would-seed: %d   skipped: %d   failed: %d\n' "$seeded" "$skipped" "$failed"
+[[ "$APPLY" != "1" ]] && echo 'Dry-run only. Re-run with APPLY=1 to create PRs.'
 exit 0
