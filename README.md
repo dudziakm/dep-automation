@@ -226,6 +226,8 @@ przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
 
 ## Dokumentacja i warstwa AI
 
+- [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md) — manual Mend/GitHub steps to give Renovate write access
+- [`docs/AUTOMERGE-PROOF-PLAN.md`](docs/AUTOMERGE-PROOF-PLAN.md) — green-path and red-control plan once Renovate wakes
 - [`docs/AUTOMATION-PLAN.md`](docs/AUTOMATION-PLAN.md) — full execution plan:
   measurements, corrections of earlier conclusions, rollout order. The previous
   Polish copy at `docs/PLAN-AUTOMATYZACJI.md` now redirects here.

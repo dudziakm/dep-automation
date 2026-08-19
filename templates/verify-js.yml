@@ -1,10 +1,10 @@
 name: verify
 
-# Lekka bramka dla aktualizacji zaleznosci: instalacja, typecheck i build.
-# Swiadomie NIE uruchamia E2E. Zestawy Playwrighta i Cypressa w tych repo
-# celuja w zewnetrzne serwisy, ktore znikaja, przekierowuja albo blokuja ruch
-# z centrow danych — jako bramka daja szum, nie dowod. Tu chodzi o sygnal,
-# ktory jest zielony wtedy i tylko wtedy, gdy podbicie wersji niczego nie zepsulo.
+# Lightweight gate for dependency updates: install, typecheck, and build.
+# Deliberately does NOT run E2E. Playwright and Cypress suites in these repos
+# target external services that disappear, redirect, or block traffic
+# from data centers — as a gate they produce noise, not proof. This is about a signal
+# that is green if and only if the version bump did not break anything.
 
 on:
   pull_request:
@@ -31,9 +31,9 @@ jobs:
     outputs:
       dirs: ${{ steps.find.outputs.dirs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: find
-        name: Znajdz katalogi projektow
+        name: Find project directories
         run: |
           set -euo pipefail
           if [ -f package.json ]; then
@@ -47,7 +47,7 @@ jobs:
                      -printf '%h\n' | sort -u | jq -R . | jq -sc .)
           fi
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
-          echo "Katalogi do sprawdzenia: $dirs"
+          echo "Directories to check: $dirs"
 
   verify:
     needs: discover
@@ -62,10 +62,10 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: pm
-        name: Wykryj menedzera pakietow
+        name: Detect package manager
         run: |
           set -euo pipefail
           if   [ -f pnpm-lock.yaml ]; then mgr=pnpm
@@ -73,20 +73,20 @@ jobs:
           else                             mgr=npm
           fi
           echo "mgr=$mgr" >> "$GITHUB_OUTPUT"
-          echo "Menedzer: $mgr"
+          echo "Package manager: $mgr"
 
       - uses: pnpm/action-setup@v4
         if: steps.pm.outputs.mgr == 'pnpm'
         with:
           version: 10
 
-      # Bez 'cache:' celowo — setup-node przerywa twardo, gdy nie znajdzie
-      # lockfile'a, a czesc repo go nie ma. Bramka ma byc odporna, nie szybka.
-      - uses: actions/setup-node@v4
+      # No 'cache:' intentionally — setup-node fails hard when it cannot find
+      # a lockfile, and some repos do not have one. The gate must be resilient, not fast.
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      - name: Instalacja
+      - name: Install dependencies
         run: |
           set -euo pipefail
           case "${{ steps.pm.outputs.mgr }}" in
@@ -96,21 +96,21 @@ jobs:
               if [ -f package-lock.json ]; then
                 npm ci
               else
-                echo "Brak package-lock.json — instaluje bez zamrozenia."
+                echo "Missing package-lock.json — installing without frozen lockfile."
                 npm install --no-audit --no-fund
               fi
               ;;
           esac
 
-      # Wlasny skrypt repo ma pierwszenstwo przed golym tsc. Frameworki generuja
-      # typy dopiero w swoim kroku sync (Astro, Next, SvelteKit), wiec samo
-      # 'tsc --noEmit' zglasza brakujace moduly wirtualne i daje falszywa czerwien.
+      # The repo's own script takes precedence over raw tsc. Frameworks generate
+      # types only during their sync step (Astro, Next, SvelteKit), so raw
+      # 'tsc --noEmit' reports missing virtual modules and produces false failures.
       - name: Typecheck
         run: |
           set -euo pipefail
           script=$(node -e "const s=require('./package.json').scripts||{};process.stdout.write(s.typecheck?'typecheck':(s['type-check']?'type-check':''))")
           if [ -n "$script" ]; then
-            echo "Uzywam skryptu repo: $script"
+            echo "Using repo script: $script"
             case "${{ steps.pm.outputs.mgr }}" in
               pnpm) pnpm run "$script" ;;
               yarn) yarn run "$script" ;;
@@ -119,10 +119,10 @@ jobs:
             exit 0
           fi
           if [ ! -f tsconfig.json ]; then
-            echo "Brak skryptu typecheck i brak tsconfig.json — pomijam."; exit 0
+            echo "No typecheck script and no tsconfig.json — skipping."; exit 0
           fi
           if ! node -e "const p=require('./package.json');const d={...p.dependencies,...p.devDependencies};process.exit(d.typescript?0:1)"; then
-            echo "typescript nie jest zalezoscia repo — pomijam, zeby nie sciagac losowej wersji."; exit 0
+            echo "typescript is not a repo dependency — skipping to avoid downloading a random version."; exit 0
           fi
           npx --no-install tsc --noEmit
 
@@ -130,7 +130,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! node -e "const p=require('./package.json');process.exit(p.scripts&&p.scripts.build?0:1)"; then
-            echo "Brak skryptu build — pomijam."; exit 0
+            echo "No build script — skipping."; exit 0
           fi
           case "${{ steps.pm.outputs.mgr }}" in
             pnpm) pnpm run build ;;
@@ -146,7 +146,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! node -e "const s=require('./package.json').scripts||{};process.exit(s.start?0:1)"; then
-            echo "Brak skryptu start — pomijam smoke."; exit 0
+            echo "No start script — skipping smoke."; exit 0
           fi
           log="$(mktemp)"
           case "${{ steps.pm.outputs.mgr }}" in
@@ -188,46 +188,46 @@ jobs:
           wait "$pid" 2>/dev/null || true
           tail -n 40 "$log"
 
-      # Bramka, ktora po cichu pomija typecheck i build, swieci na zielono po samej
-      # instalacji. To wciaz realny sygnal (zla wersja, rozjechany lockfile, konflikt
-      # peer albo override), ale duzo slabszy niz sie wydaje. Wypisujemy wprost, co
-      # faktycznie zostalo sprawdzone, zeby nikt nie budowal na tym falszywej pewnosci.
-      - name: Co ta bramka faktycznie sprawdzila
+      # A gate that silently skips typecheck and build turns green after just
+      # installation. That is still a real signal (wrong version, desynced lockfile,
+      # peer or override conflict), but much weaker than it seems. We explicitly print
+      # what was actually checked so no one builds false confidence on it.
+      - name: What this gate actually checked
         if: always()
         run: |
           set -euo pipefail
-          ts=nie
+          ts=no
           if node -e "const s=require('./package.json').scripts||{};process.exit(s.typecheck||s['type-check']?0:1)"; then
-            ts="tak (skrypt repo)"
+            ts="yes (repo script)"
           elif [ -f tsconfig.json ] && node -e "const p=require('./package.json');const d={...p.dependencies,...p.devDependencies};process.exit(d.typescript?0:1)"; then
-            ts="tak (tsc --noEmit)"
+            ts="yes (tsc --noEmit)"
           fi
-          bd=nie
+          bd=no
           if node -e "const p=require('./package.json');process.exit(p.scripts&&p.scripts.build?0:1)"; then
-            bd=tak
+            bd=yes
           fi
-          sm=nie
+          sm=no
           if [ "${VERIFY_SMOKE:-false}" = "true" ] && node -e "const s=require('./package.json').scripts||{};process.exit(s.start?0:1)"; then
-            sm=tak
+            sm=yes
           fi
           {
-            echo "### Bramka verify — \`${{ matrix.dir }}\`"
+            echo "### Verify gate — \`${{ matrix.dir }}\`"
             echo ""
-            echo "| Etap | Uruchomiony |"
+            echo "| Stage | Executed |"
             echo "|---|---|"
-            echo "| instalacja zaleznosci | tak |"
+            echo "| install dependencies | yes |"
             echo "| typecheck (\`tsc --noEmit\`) | $ts |"
             echo "| build | $bd |"
             echo "| smoke start | $sm |"
-            if [ "$ts" = nie ] && [ "$bd" = nie ]; then
+            if [ "$ts" = no ] && [ "$bd" = no ]; then
               echo ""
-              echo "> **Uwaga:** w tym katalogu bramka sprawdza wylacznie instalacje."
-              echo "> Nie traktuj zielonego wyniku jako dowodu, ze aktualizacja niczego nie zepsula."
+              echo "> **Warning:** In this directory, the gate only checks installation."
+              echo "> Do not treat a green result as proof that the update broke nothing."
             fi
-            if [ "$ts" = "tak (tsc --noEmit)" ]; then
+            if [ "$ts" = "yes (tsc --noEmit)" ]; then
               echo ""
-              echo "> \`tsc --noEmit\` przy \`skipLibCheck: true\` (typowe ustawienie) nie wykrywa"
-              echo "> wiekszosci regresji w typach samych zaleznosci — tylko te, ktore wychodza"
-              echo "> na powierzchni w kodzie repo."
+              echo "> \`tsc --noEmit\` with \`skipLibCheck: true\` (typical setting) does not detect"
+              echo "> most regressions in dependency types themselves — only those that surface"
+              echo "> in the repo's code."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

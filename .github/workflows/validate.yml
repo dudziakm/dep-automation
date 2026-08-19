@@ -13,14 +13,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v5+ runs on Node 24; v4 still targets Node 20 and warns on the runner.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
 
-      # Walidator klasyfikuje plik po nazwie, a nazwy presetow (js.json itd.)
-      # nie sa mu znane. Kopiujemy kazdy pod renovate.json i walidujemy osobno.
+      # The validator classifies by filename, and preset names (js.json etc.)
+      # are unknown to it. Copy each file to renovate.json and validate separately.
       - name: renovate-config-validator
         run: |
           set -euo pipefail
@@ -32,18 +33,18 @@ jobs:
                  renovate-config-validator --strict renovate.json); then
               echo "$f OK"
             else
-              echo "::error file=$f::walidacja nieudana"
+              echo "::error file=$f::validation failed"
               fail=1
             fi
             echo "::endgroup::"
           done
           exit $fail
 
-      # renovate-config-validator NIE pobiera zdalnych presetow: config z
-      # celowo blednym "github>owner/repo:nie-ma-takiego" przechodzi u niego
-      # jako poprawny. Zmiana nazwy pliku presetu przeszlaby wiec niezauwazona,
-      # a wysypalaby sie dopiero u bota. Dlatego sprawdzamy odniesienia sami.
-      - name: odniesienia miedzy presetami
+      # renovate-config-validator does NOT fetch remote presets: a config with a
+      # deliberately broken "github>owner/repo:does-not-exist" still passes.
+      # Renaming a preset file would therefore slip through here and only fail
+      # at the bot. Check local references ourselves.
+      - name: cross-preset references
         run: |
           set -euo pipefail
           fail=0
@@ -56,14 +57,14 @@ jobs:
                 target="${ref##*:}.json"
               fi
               if [[ -f "$target" ]]; then
-                echo "$f -> $ref (plik $target istnieje)"
+                echo "$f -> $ref (file $target exists)"
               else
-                echo "::error file=$f::preset '$ref' wskazuje na brakujacy plik $target"
+                echo "::error file=$f::preset '$ref' points at missing file $target"
                 fail=1
               fi
             done < <(jq -r '(.extends // [])[] | select(startswith("github>dudziakm/dep-automation"))' "$f")
           done
           exit $fail
 
-      - name: shellcheck skryptow
+      - name: shellcheck scripts
         run: shellcheck scripts/*.sh

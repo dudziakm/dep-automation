@@ -917,3 +917,14 @@ Also covers the "10x devs" course repos and "concept AI" repos in general. The
 scope was reversed once (an earlier temporary opt-in of cards/rules/compass was
 withdrawn); this exclusion is the final state. The machine-readable list lives in
 `EXCLUDED-REPOS.txt` and the seeding scripts skip anything in it.
+
+## Status as of 2026-08-19
+
+- Renovate remains silent: `renovate[bot]` still has `permission: none` on
+  pilots. Owner action: [`OWNER-RENOVATE-CHECKLIST.md`](OWNER-RENOVATE-CHECKLIST.md).
+- Automerge proof waits on first real Renovate PRs:
+  [`AUTOMERGE-PROOF-PLAN.md`](AUTOMERGE-PROOF-PLAN.md).
+- Do **not** privatize `dep-automation` until Renovate successfully resolves
+  public presets.
+- `validate.yml` uses `actions/checkout@v5` + `actions/setup-node@v5` (Node 24
+  action runtime) to clear the Node 20 deprecation warning.
