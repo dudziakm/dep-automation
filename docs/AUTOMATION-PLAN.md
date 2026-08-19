@@ -1005,20 +1005,28 @@ section below. Red control still held:
   opened as `dudziakm` (previous `gh` was `dudziakm-nf` → "not a collaborator")
   and squash-merged after validate CI.
 
-Durable follow-up (not done here): have `templates/verify-js.yml` post that
-commit status itself, then roll it out, so private-repo automerge does not
-need a one-off status on each SHA.
+Durable follow-up **done** (2026-08-19 late afternoon): `templates/verify-js.yml`
+now posts commit status `verify` itself ([#20](https://github.com/dudziakm/dep-automation/pull/20)).
+Rolled into existing in-scope copies: **26 merged**, **4 left open** because
+verify CI is red (not force-merged):
+[mdm-cypress#30](https://github.com/dudziakm/mdm-cypress/pull/30),
+[jit-old-cypress#22](https://github.com/dudziakm/jit-old-cypress/pull/22),
+[web-ideas#69](https://github.com/dudziakm/web-ideas/pull/69),
+[openReel#29](https://github.com/dudziakm/openReel/pull/29).
+Frozen repos untouched. No Renovate dispatch (live #6 already complete).
 
-### Remaining (4)
+Automerge **green proven** ([nord-fjord-rag-guide#49](https://github.com/dudziakm/nord-fjord-rag-guide/pull/49)
+on live #6; [todo_bmad#22](https://github.com/dudziakm/todo_bmad/pull/22) on live #5).
+Red **held**: [openReel#27](https://github.com/dudziakm/openReel/pull/27).
+
+### Remaining (optional)
 
 1. Optional: PAT **Dependabot alerts: Read** (log WARN, not a write 403).
-2. Private-repo automerge durability — verify workflow should post a commit
-   status (or the PAT needs a Checks-capable token). Until then, new SHAs on
-   private repos stay yellow to Renovate.
-3. Drain leftover Dependabot PRs once Renovate is the source of truth.
-4. Optional: smoke / English schema keys in `ai/providers.json` / canvas polish.
+2. Drain leftover Dependabot PRs once Renovate is the source of truth.
+3. Optional: smoke / English schema keys in `ai/providers.json` / canvas polish.
    Private `dep-automation` is unblocked on preset-fetch (public presets already
    work).
+4. Optional: the four red verify PRs listed above (pre-existing gate failures).
 
 Owner-facing runbook: [`OWNER-RENOVATE-CHECKLIST.md`](OWNER-RENOVATE-CHECKLIST.md).
 Do **not** trigger Renovate from a docs update. Do **not** touch frozen repos.
