@@ -1,54 +1,50 @@
 # Owner checklist — self-hosted Renovate (GitHub Actions)
 
-The Mend-hosted Renovate App is inert on this account (never ran a job). Renovate
-now runs as a scheduled workflow in `dudziakm/dep-automation`. Presets are
-unchanged: target repos still extend `github>dudziakm/dep-automation(:js|:jvm|:mixed|:automerge)`.
+The Mend-hosted Renovate App is inert on this account. Renovate now runs from
+`dudziakm/dep-automation` via `.github/workflows/renovate.yml`. Presets are
+unchanged (`github>dudziakm/dep-automation(:js|:jvm|:mixed|:automerge)`).
 
-## 1. PAT (fine-grained) → Actions secret `RENOVATE_TOKEN`
+Secret name confirmed: **`RENOVATE_TOKEN`** (already present in
+`dep-automation` Actions secrets).
 
-Create a **fine-grained personal access token** (GitHub → Settings → Developer
-settings → Personal access tokens → Fine-grained tokens):
+## What already ran (2026-08-19)
+
+| Run | Result |
+|---|---|
+| [Dry-run](https://github.com/dudziakm/dep-automation/actions/runs/32228136213) | **success** — discovered 51 repos → **45** after filter; frozen repos never started; would create dashboards/PRs |
+| [Live](https://github.com/dudziakm/dep-automation/actions/runs/32228667171) | **success** (workflow) but **no dashboards/PRs** — PAT cannot write |
+
+Live failures (owner must fix the PAT):
+
+1. **`git push` 403** — `Permission to dudziakm/<repo>.git denied` → need **Contents: Read and write**
+2. **`POST .../issues` 403** — header `x-accepted-github-permissions: issues=write` → need **Issues: Read and write**
+3. **PAT repo set is incomplete** — pilots like `testPwSetup` / `nord-fjord-rag-guide` were **not** among the 51 visible repos. Expand **Selected repositories** to every in-scope repo; keep the frozen list out.
+
+## Fix the fine-grained PAT (then re-run)
+
+Edit the existing fine-grained token (or create a new one and replace the secret):
 
 | Setting | Value |
 |---|---|
 | Resource owner | `dudziakm` |
-| Expiration | your choice (rotate before it expires) |
-| Repository access | **Selected repositories** — every repo you want Renovate to manage, **excluding** the frozen list below. Do not grant the frozen repos. |
+| Repository access | **Selected repositories** — all repos Renovate should manage; **do not** include the frozen list below |
+| Contents | **Read and write** |
+| Issues | **Read and write** |
+| Pull requests | **Read and write** |
+| Workflows | **Read and write** (needed when Renovate updates Actions) |
+| Metadata | Read-only |
 
-Repository permissions (minimum):
+If you create a new token: paste it over the existing Actions secret
+`RENOVATE_TOKEN` at
+https://github.com/dudziakm/dep-automation/settings/secrets/actions
 
-| Permission | Access |
-|---|---|
-| Contents | Read and write |
-| Issues | Read and write |
-| Pull requests | Read and write |
-| Workflows | Read and write |
-| Metadata | Read-only (always present) |
+Then: Actions → **renovate** → Run workflow → `dry_run=false`. Expect Dependency
+Dashboard issues and/or `renovate/*` PRs. Logs:
+https://github.com/dudziakm/dep-automation/actions/workflows/renovate.yml
 
-Account permissions: none required.
+Optional after a successful live write: suspend/uninstall the Mend Renovate App.
 
-Add the token as a repository secret:
-
-1. Open https://github.com/dudziakm/dep-automation/settings/secrets/actions
-2. New repository secret → name **`RENOVATE_TOKEN`** → paste the PAT → Save
-
-If the secret already exists under that exact name, skip this step.
-
-## 2. First run
-
-1. Open https://github.com/dudziakm/dep-automation/actions/workflows/renovate.yml
-2. **Run workflow** → leave **dry_run = true** → Run
-3. Open the run log. Confirm frozen repos are not processed (filter / skip lines).
-4. Run again with **dry_run = false** (live). Expect Dependency Dashboard issues and/or Renovate PRs on pilots (`testPwSetup`, `nord-fjord-rag-guide`, …).
-
-Scheduled runs (every 6 hours) are live, not dry-run. Logs: same Actions URL.
-
-## 3. Optional — retire the Mend App
-
-After a successful live run (dashboard or PR on a pilot): GitHub → Settings →
-Applications → **Renovate** → Suspend or Uninstall. Self-hosted replaces it.
-
-## Hard-excluded repos (never grant the PAT; runner also blocks them)
+## Hard-excluded repos (never grant; runner also blocks)
 
 - `ai-concept-compass`
 - `ai-concept-compass-greenfield`
@@ -56,6 +52,6 @@ Applications → **Renovate** → Suspend or Uninstall. Self-hosted replaces it.
 - `my10xCards`
 - `ai-rules-builder`
 
-Enforced in `.github/renovate-global.js` (`autodiscoverFilter` + `packageRules`
-deny) and in `EXCLUDED-REPOS.txt` / seeders. Do not flip `dep-automation` to
-private until a live run has fetched the public presets successfully.
+Enforced in `.github/renovate-global.js` (`autodiscoverFilter` + `packageRules`)
+and `EXCLUDED-REPOS.txt`. Do not flip `dep-automation` private until a live run
+has written successfully using the public presets.
