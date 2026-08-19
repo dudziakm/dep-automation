@@ -1,26 +1,54 @@
-# Owner checklist — Renovate write access (manual)
+# Owner checklist — self-hosted Renovate (GitHub Actions)
 
-Renovate is still silent as of 2026-08-19. Presets are public and reachable
-(HTTP 200). The GitHub App is reported Enabled, but `renovate[bot]` has
-`permission: none` on sampled repos and there are zero Dependency Dashboard
-issues / zero `author:app/renovate` artefacts. This cannot be fixed from the
-CLI — it needs an owner action in the GitHub / Mend UI.
+The Mend-hosted Renovate App is inert on this account (never ran a job). Renovate
+now runs as a scheduled workflow in `dudziakm/dep-automation`. Presets are
+unchanged: target repos still extend `github>dudziakm/dep-automation(:js|:jvm|:mixed|:automerge)`.
 
-## Do this once (order matters)
+## 1. PAT (fine-grained) → Actions secret `RENOVATE_TOKEN`
 
-1. Open **https://github.com/settings/installations** → **Renovate**
-   (Mend Renovate).
-2. Under **Repository access**, choose **All repositories** (or explicitly
-   select every in-scope repo — do **not** include the excluded list below
-   unless you intentionally re-permit them).
-3. Save.
-4. Open **https://developer.mend.io/github/dudziakm** and confirm repos are
-   listed with a last-run timestamp (not “Never run”).
-5. Click **Re-run** on one pilot (`testPwSetup` or `nord-fjord-rag-guide`).
-6. Within ~10–30 minutes expect either a Dependency Dashboard issue or a
-   Renovate PR on that pilot.
+Create a **fine-grained personal access token** (GitHub → Settings → Developer
+settings → Personal access tokens → Fine-grained tokens):
 
-## Hard-excluded repos (do not grant / do not re-seed)
+| Setting | Value |
+|---|---|
+| Resource owner | `dudziakm` |
+| Expiration | your choice (rotate before it expires) |
+| Repository access | **Selected repositories** — every repo you want Renovate to manage, **excluding** the frozen list below. Do not grant the frozen repos. |
+
+Repository permissions (minimum):
+
+| Permission | Access |
+|---|---|
+| Contents | Read and write |
+| Issues | Read and write |
+| Pull requests | Read and write |
+| Workflows | Read and write |
+| Metadata | Read-only (always present) |
+
+Account permissions: none required.
+
+Add the token as a repository secret:
+
+1. Open https://github.com/dudziakm/dep-automation/settings/secrets/actions
+2. New repository secret → name **`RENOVATE_TOKEN`** → paste the PAT → Save
+
+If the secret already exists under that exact name, skip this step.
+
+## 2. First run
+
+1. Open https://github.com/dudziakm/dep-automation/actions/workflows/renovate.yml
+2. **Run workflow** → leave **dry_run = true** → Run
+3. Open the run log. Confirm frozen repos are not processed (filter / skip lines).
+4. Run again with **dry_run = false** (live). Expect Dependency Dashboard issues and/or Renovate PRs on pilots (`testPwSetup`, `nord-fjord-rag-guide`, …).
+
+Scheduled runs (every 6 hours) are live, not dry-run. Logs: same Actions URL.
+
+## 3. Optional — retire the Mend App
+
+After a successful live run (dashboard or PR on a pilot): GitHub → Settings →
+Applications → **Renovate** → Suspend or Uninstall. Self-hosted replaces it.
+
+## Hard-excluded repos (never grant the PAT; runner also blocks them)
 
 - `ai-concept-compass`
 - `ai-concept-compass-greenfield`
@@ -28,19 +56,6 @@ CLI — it needs an owner action in the GitHub / Mend UI.
 - `my10xCards`
 - `ai-rules-builder`
 
-## After Renovate wakes — quick proof
-
-```bash
-# Should become >0
-gh api -X GET search/issues -f q='user:dudziakm author:app/renovate' --jq .total_count
-gh api -X GET search/issues -f q='user:dudziakm is:issue in:title "Dependency Dashboard"' --jq .total_count
-
-# Bot should no longer report permission:none
-gh api repos/dudziakm/testPwSetup/collaborators/renovate%5Bbot%5D/permission --jq .permission
-```
-
-## Do not do yet
-
-- Do **not** flip `dep-automation` to private until Renovate has successfully
-  fetched `github>dudziakm/dep-automation:*` presets and opened real PRs.
-  Privatizing breaks preset resolution unless a token/hostRules story is added.
+Enforced in `.github/renovate-global.js` (`autodiscoverFilter` + `packageRules`
+deny) and in `EXCLUDED-REPOS.txt` / seeders. Do not flip `dep-automation` to
+private until a live run has fetched the public presets successfully.

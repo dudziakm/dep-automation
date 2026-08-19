@@ -1,0 +1,65 @@
+# Central self-hosted Renovate runner for dudziakm.
+# Replaces the Mend-hosted Renovate App (inert on this account).
+#
+# Token: repository Actions secret RENOVATE_TOKEN (fine-grained PAT).
+# Frozen repos are excluded in .github/renovate-global.js — never weaken that
+# without an explicit owner re-permit.
+
+name: renovate
+
+on:
+  schedule:
+    # Every 6 hours
+    - cron: '15 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run only (log actions, create no PRs or branches)'
+        type: boolean
+        default: true
+      log_level:
+        description: 'Renovate log level'
+        type: choice
+        default: info
+        options:
+          - info
+          - debug
+
+concurrency:
+  group: renovate-dudziakm
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Require RENOVATE_TOKEN
+        env:
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          if [ -z "${RENOVATE_TOKEN}" ]; then
+            echo "::error::RENOVATE_TOKEN secret is missing or empty."
+            echo "Add a fine-grained PAT as the repository Actions secret RENOVATE_TOKEN."
+            echo "See docs/OWNER-RENOVATE-CHECKLIST.md."
+            exit 1
+          fi
+          echo "RENOVATE_TOKEN is present (value not printed)."
+
+      - uses: actions/checkout@v5
+
+      - name: Self-hosted Renovate
+        # renovatebot/github-action@v46.2.2
+        uses: renovatebot/github-action@e09d604f8f803bb527bd8321ed5be06c460b8682
+        with:
+          configurationFile: .github/renovate-global.js
+          token: ${{ secrets.RENOVATE_TOKEN }}
+          renovate-version: 44.33.2
+        env:
+          LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
+          RENOVATE_WORKFLOW_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          # Same token for github.com release notes / changelog lookups
+          GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_TOKEN }}

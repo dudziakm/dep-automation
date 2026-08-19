@@ -175,50 +175,32 @@ However, one must know the limits of this signal:
 Do not spread the gate wider than necessary: the repositories are private, so
 Actions minutes are actually consumed. For the same reason, the workflow has no schedule —
 it runs on PRs, on `push` to the default branch, and manually.
-## Renovate App Installation
+## Self-hosted Renovate (GitHub Actions)
 
-Seeding `renovate.json` must take place **before** installing the app. Renovate
-detects an existing config and skips the onboarding PR; without this, you will get
-onboarding with bare `config:recommended`, i.e., without this policy.
+The Mend-hosted Renovate App is **not** used on this account (it never executed
+jobs). Renovate runs from [`.github/workflows/renovate.yml`](.github/workflows/renovate.yml)
+in this repository, with discovery rules in
+[`.github/renovate-global.js`](.github/renovate-global.js).
 
-1. `APPLY=1 ./scripts/seed.sh repos.tsv` and merge the PRs.
-2. Install the app: https://github.com/apps/renovate
-3. Select repositories from the `preset` column other than `skip`.
-4. Check the Dependency Dashboard in a few repos before expanding the scope.
+- Schedule: every 6 hours, plus `workflow_dispatch` (dry-run toggle, log level).
+- Secret: `RENOVATE_TOKEN` (fine-grained PAT). See
+  [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md).
+- Frozen repos are excluded in the runner config **and** in `EXCLUDED-REPOS.txt`.
 
-**The config alone does not run anything.** Seeding `renovate.json` to 54 repositories
-does not cause any bot action until the app is installed — not a single PR is
-created, not a single Dependency Dashboard, and there is no error message either.
-Silence looks identical to a broken config, so do not diagnose it by symptoms:
-check the list of installed applications.
+Target repos still only need their one-line `renovate.json` extending these
+presets; do not duplicate policy into the runner.
 
-Checking if the bot has ever done anything (`0` = never ran):
+Checking whether Renovate has produced artefacts:
 
 ```bash
 gh api -X GET search/issues -f q='user:dudziakm author:app/renovate' --jq .total_count
+# Self-hosted commits as the PAT owner — also check:
+gh api -X GET search/issues -f q='user:dudziakm "Dependency Dashboard" in:title' --jq .total_count
 ```
 
-Distinguishing "config is broken" from "bot is not working" — dry-run locally,
-without the app and without changes to the repo:
-
-```bash
-RENOVATE_TOKEN="$(gh auth token -u dudziakm)" \
-GITHUB_COM_TOKEN="$(gh auth token -u dudziakm)" \
-  npx --yes renovate --dry-run=full --platform=github dudziakm/testPwSetup
-```
-
-A healthy config ends with `"status": "activated"`, `"onboarded": true`, and
-the lines `DRY-RUN: Would commit files to branch ...` and `Would ensure Dependency
-Dashboard`. If you see this and there is still silence on GitHub, the issue is
-solely within the app installation scope.
-
-The Renovate app is also free for private repositories (Mend Renovate Community Cloud
-plan), so the privacy of these repos is not an obstacle. The free plan limits
-are one concurrent job per account and a run every ~4 hours — with 54 repositories,
-the first full cycle takes time, so do not panic after an hour.
 ## Documentation and AI layer
 
-- [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md) — manual Mend/GitHub steps to give Renovate write access
+- [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md) — PAT secret, first run, optional Mend uninstall
 - [`docs/AUTOMERGE-PROOF-PLAN.md`](docs/AUTOMERGE-PROOF-PLAN.md) — green-path and red-control plan once Renovate wakes
 - [`docs/AUTOMATION-PLAN.md`](docs/AUTOMATION-PLAN.md) — full execution plan:
   measurements, corrections of earlier conclusions, rollout order. The previous

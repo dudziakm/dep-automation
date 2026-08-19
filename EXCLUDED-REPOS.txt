@@ -2,6 +2,9 @@
 # Set by the owner on 2026-08-18. Do NOT seed renovate.json, verify gate,
 # automerge, or any dependency/security PR into these until the owner
 # officially re-permits. Seeding scripts read this file and skip these repos.
+#
+# The self-hosted runner (.github/renovate-global.js) also denies these via
+# autodiscoverFilter + packageRules. Keep both lists in sync (validate CI checks).
 ai-concept-compass
 ai-concept-compass-greenfield
 10xCardsAstro
