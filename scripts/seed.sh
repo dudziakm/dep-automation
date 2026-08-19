@@ -2,6 +2,7 @@
 
 # Hard exclusion: never seed repos listed in EXCLUDED-REPOS.txt (owner policy 2026-08-18).
 EXCLUDE_FILE="$(dirname "$0")/../EXCLUDED-REPOS.txt"
+# shellcheck disable=SC2317,SC2329  # called from the loop below; shellcheck cannot see indirect use
 is_excluded() {
   [ -f "$EXCLUDE_FILE" ] || return 1
   grep -vE '^[[:space:]]*#' "$EXCLUDE_FILE" | grep -qx "$1"
@@ -54,6 +55,11 @@ while IFS=$'\t' read -r name eco activity preset; do
   [[ "$preset" == skip* || -z "$preset" ]] && continue
 
   if [[ -n "$ONLY" ]] && [[ ",$ONLY," != *",$name,"* ]]; then continue; fi
+
+  if is_excluded "$name"; then
+    printf 'SKIP     %-32s excluded (EXCLUDED-REPOS.txt)\n' "$name"
+    skipped=$((skipped+1)); continue
+  fi
 
   # Renovate czyta config tylko z gałęzi domyślnej.
   existing=""
