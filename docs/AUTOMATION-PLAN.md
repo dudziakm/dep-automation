@@ -957,22 +957,68 @@ Open PRs with head `renovate/` on `user:dudziakm`: **97** across **43** repos,
 author `dudziakm` (self-hosted PAT — **0** `author:app/renovate`). **None** on
 the five frozen repos.
 
-Green automerge candidate is already open and verify-green:
+Green automerge candidate was open and verify-green at this inventory:
 [nord-fjord-rag-guide#49](https://github.com/dudziakm/nord-fjord-rag-guide/pull/49)
-(`cors` patch `v2.8.6`, `MERGEABLE` / `CLEAN`, verify SUCCESS). Renovate has
-not merged it yet (`automergeType: pr`, `platformAutomerge: false`). Red
-control still held: [openReel#27](https://github.com/dudziakm/openReel/pull/27).
+(`cors` patch `v2.8.6`). **Merged by the next Renovate run** — see the proof
+section below. Red control still held:
+[openReel#27](https://github.com/dudziakm/openReel/pull/27).
 
-### Remaining (5)
+### Automerge green proof (2026-08-19 ~13:00 local)
 
-1. **Automerge green proof** — wait for a Renovate run to merge
-   `nord-fjord-rag-guide#49`. Do not force-merge. Playwright PRs on
-   `testPwSetup` / `coachingDocs` do **not** count (exclusion list).
-2. Optional: PAT **Dependabot alerts: Read** (log WARN, not a write 403).
-3. Private `dep-automation` only after preset-fetch is proven on self-hosted
-   (now likely OK — public presets already work).
-4. Drain leftover Dependabot PRs once Renovate is the source of truth.
-5. Optional: smoke / English schema keys in `ai/providers.json` / canvas polish.
+**Proven.** Self-hosted Renovate merged the designated candidate:
+
+- [nord-fjord-rag-guide#49](https://github.com/dudziakm/nord-fjord-rag-guide/pull/49)
+  — `cors` `2.8.5` → `2.8.6` (runtime patch, `:automerge` extended).
+- Log: `PR automerged` on
+  [run 32243424001](https://github.com/dudziakm/dep-automation/actions/runs/32243424001)
+  at 10:50:47Z (`branch=renovate/cors-2.x-lockfile`). Merge commit
+  `eb9e17ec`. Author is `dudziakm` because the runner uses the PAT, not
+  `app/renovate`.
+- Red control still **OPEN**: [openReel#27](https://github.com/dudziakm/openReel/pull/27)
+  (sweetalert2 major + `vulnerabilityAlerts.automerge: false`).
+- Public-repo automerge had already fired earlier the same morning:
+  [todo_bmad#22](https://github.com/dudziakm/todo_bmad/pull/22) (`concurrently`
+  patch) on live #5.
+
+**Why #49 stayed open through live #4/#5**
+
+- Preset is correct: `automergeType: pr`, `platformAutomerge: false` (Renovate
+  merges itself; GitHub native auto-merge stays off). `allow_auto_merge` is
+  false on the repo; `autoMergeRequest` was null. No branch protection
+  (private repo on GitHub Free).
+- Live #4 created the PR then finished the repo before verify completed.
+- Live #5 skipped cors because the fine-grained PAT **cannot call the Checks
+  API on private repos**. Combined commit status was `pending` with
+  `total_count: 0`; verify check-runs were already SUCCESS. Renovate maps that
+  to yellow and will not automerge (`ignoreTests: false`). Public repos are
+  fine — check-runs are world-readable — which is why `todo_bmad#22` merged
+  without extra work.
+
+**What was done (no force-merge, no extra dispatch)**
+
+- Mirrored the already-green verify check-run as commit status `verify=success`
+  on SHA `87d0c26d` (Statuses API works; Checks API does not). Combined status
+  became `success`.
+- Live #6 [32243424001](https://github.com/dudziakm/dep-automation/actions/runs/32243424001)
+  was already in progress; it then logged `PR automerged`.
+- Docs status PR [#18](https://github.com/dudziakm/dep-automation/pull/18)
+  opened as `dudziakm` (previous `gh` was `dudziakm-nf` → "not a collaborator")
+  and squash-merged after validate CI.
+
+Durable follow-up (not done here): have `templates/verify-js.yml` post that
+commit status itself, then roll it out, so private-repo automerge does not
+need a one-off status on each SHA.
+
+### Remaining (4)
+
+1. Optional: PAT **Dependabot alerts: Read** (log WARN, not a write 403).
+2. Private-repo automerge durability — verify workflow should post a commit
+   status (or the PAT needs a Checks-capable token). Until then, new SHAs on
+   private repos stay yellow to Renovate.
+3. Drain leftover Dependabot PRs once Renovate is the source of truth.
+4. Optional: smoke / English schema keys in `ai/providers.json` / canvas polish.
+   Private `dep-automation` is unblocked on preset-fetch (public presets already
+   work).
 
 Owner-facing runbook: [`OWNER-RENOVATE-CHECKLIST.md`](OWNER-RENOVATE-CHECKLIST.md).
 Do **not** trigger Renovate from a docs update. Do **not** touch frozen repos.
