@@ -1,105 +1,101 @@
 # dep-automation
 
-Centralne presety Renovate dla repozytoriów `dudziakm`. Każde repo objęte
-automatyzacją ma jednolinijkowy `renovate.json`, cała polityka mieszka tutaj.
+Central Renovate presets for `dudziakm` repositories. Every repo covered by
+automation has a single-line `renovate.json`, the entire policy lives here.
 
-Repo jest **publiczne** świadomie: Renovate musi umieć pobrać preset przez
-`github>dudziakm/dep-automation`, a presety nie zawierają żadnych sekretów.
+The repo is **public** intentionally: Renovate must be able to fetch the preset via
+`github>dudziakm/dep-automation`, and the presets do not contain any secrets.
+## Presets
 
-## Presety
-
-| Plik | Referencja | Dla kogo |
+| File | Reference | For whom |
 |---|---|---|
-| `default.json` | `github>dudziakm/dep-automation` | Baza. Sama nie wystarcza — używaj warstwy poniżej. |
-| `js.json` | `github>dudziakm/dep-automation:js` | Repo JS/TS/Node |
-| `jvm.json` | `github>dudziakm/dep-automation:jvm` | Repo Maven/Gradle |
-| `mixed.json` | `github>dudziakm/dep-automation:mixed` | Repo z manifestami JS **i** JVM |
-| `silent.json` | `github>dudziakm/dep-automation:silent` | Repo uśpione: dashboard tak, PR-y nie |
+| `default.json` | `github>dudziakm/dep-automation` | Base. Not sufficient on its own — use the layer below. |
+| `js.json` | `github>dudziakm/dep-automation:js` | JS/TS/Node repo |
+| `jvm.json` | `github>dudziakm/dep-automation:jvm` | Maven/Gradle repo |
+| `mixed.json` | `github>dudziakm/dep-automation:mixed` | Repo with JS **and** JVM manifests |
+| `silent.json` | `github>dudziakm/dep-automation:silent` | Dormant repo: dashboard yes, PRs no |
 
-`js.json`, `jvm.json` i `silent.json` same rozszerzają `default.json`, więc config
-w repo docelowym to jedna linia:
+`js.json`, `jvm.json` and `silent.json` extend `default.json` themselves, so the config
+in the target repo is a single line:
 
 ```json
 { "extends": ["github>dudziakm/dep-automation:js"] }
 ```
+## Phase 2 deliberately does not do automerge
 
-## Faza 2 świadomie nie robi automerge
+In this phase, `automerge` is disabled **everywhere**. The goal is first to
+see how many and what kind of PRs Renovate generates, and only then open the gates.
+We will enable automerge per layer when the repo has a real CI gate.
 
-W tej fazie `automerge` jest wyłączony **wszędzie**. Celem jest najpierw
-zobaczyć, ile i jakich PR-ów Renovate generuje, a dopiero potem otwierać bramki.
-Automerge włączymy per warstwa, gdy repo będzie miało realną bramkę CI.
+Three settings determine whether automerge would be fail-closed, and all three
+are explicitly set here in `default.json`:
 
-Trzy ustawienia decydują o tym, czy automerge byłby fail-closed, i wszystkie trzy
-są tu ustawione jawnie w `default.json`:
+- `platformAutomerge: false` — **this is an override, not the default value.** In the
+  Renovate source, this option has `default: true`. By default, Renovate would delegate
+  merging to GitHub, and without branch protection (unavailable for private repos on the
+  Free plan) GitHub can merge a PR before tests start or even after their
+  failure. Setting `false` moves the decision to Renovate, which itself checks
+  the status of checks.
+- `ignoreTests: false` — default, kept explicitly. `true` would merge without tests.
+- `internalChecksAsSuccess: false` — default, kept explicitly. Prevents
+  treating Renovate's own checks (e.g., `renovate/stability-days`) as
+  green CI when the repo does not have any real workflow.
 
-- `platformAutomerge: false` — **to nadpisanie, nie wartość domyślna.** W źródle
-  Renovate ta opcja ma `default: true`. Domyślnie Renovate zleciłby scalanie
-  GitHubowi, a bez branch protection (niedostępnego dla repo prywatnych w planie
-  Free) GitHub potrafi scalić PR-a, zanim testy wystartują albo już po ich
-  porażce. Ustawienie `false` przenosi decyzję do Renovate, który sam sprawdza
-  status checków.
-- `ignoreTests: false` — domyślne, trzymane jawnie. `true` scalałoby bez testów.
-- `internalChecksAsSuccess: false` — domyślne, trzymane jawnie. Zapobiega
-  traktowaniu własnych checków Renovate (np. `renovate/stability-days`) jako
-  zielonego CI, gdy repo nie ma żadnego prawdziwego workflow.
+`minimumReleaseAgeBehaviour`, `internalChecksFilter`, and
+`dependencyDashboardReportAbandonment` are also set to their default
+values. This is deliberate: we record the intent so that a change in the default on the
+Renovate side does not silently change our policy.
+## Key decisions
 
-`minimumReleaseAgeBehaviour`, `internalChecksFilter` i
-`dependencyDashboardReportAbandonment` też są ustawione na swoje wartości
-domyślne. To celowe: zapisujemy intencję, żeby zmiana domyślnej po stronie
-Renovate nie zmieniła nam po cichu polityki.
+**7-day quarantine (`minimumReleaseAge`).** The cheapest real defense against a
+poisoned package. It does not protect the existing tree — `npm ci` does not perform
+dependency re-resolution — only new resolutions, and that is the intended behavior.
+Security patches bypass quarantine via the `vulnerabilityAlerts` block.
 
-## Kluczowe decyzje
+**We do not touch the `overrides` block** (`js.json`, `matchDepTypes: overrides`). It is
+a manually written security policy, not a dependency. Renovate and Dependabot are not
+tools for fixing transitive vulnerabilities and this should not be handed over to them.
 
-**Kwarantanna 7 dni (`minimumReleaseAge`).** Najtańsza realna obrona przed
-skażoną paczką. Nie chroni istniejącego drzewa — `npm ci` nie robi ponownego
-rozwiązywania zależności — tylko nowe rozwiązania, i to jest właściwe zachowanie.
-Łatki bezpieczeństwa pomijają kwarantannę przez blok `vulnerabilityAlerts`.
+**We do not touch dependencies managed by a BOM** (`jvm.json`). Renovate does not
+run Maven, so it does not see that Maven will reset the version to the one from the BOM anyway.
+A PR would be created that passes the build and at the same time lies about what will actually
+be used.
 
-**Bloku `overrides` nie ruszamy** (`js.json`, `matchDepTypes: overrides`). To
-polityka bezpieczeństwa pisana ręcznie, nie zależność. Renovate i Dependabot nie
-są narzędziami do naprawy podatności przechodnich i nie należy im tego oddawać.
+**Cypress and Playwright in groups.** Plugins have narrow `peer` ranges for the runner
+version. Having them diverge is exactly the class of error that we fixed manually
+in `playwright-lum-project-cypress`.
 
-**Nie ruszamy zależności zarządzanych przez BOM** (`jvm.json`). Renovate nie
-uruchamia Mavena, więc nie widzi, że Maven i tak zresetuje wersję do tej z BOM-a.
-Powstałby PR, który przechodzi build i jednocześnie kłamie o tym, co realnie
-zostanie użyte.
+**`osvVulnerabilityAlerts` is marked as experimental in Renovate.**
+I am leaving it enabled because the OSV database is queried locally (no rate limits),
+but treat this as a signal, not a guarantee, and expect behavior changes.
 
-**Cypress i Playwright w grupach.** Wtyczki mają wąskie zakresy `peer` na wersję
-runnera. Rozjechanie ich to dokładnie ta klasa błędu, którą naprawialiśmy ręcznie
-w `playwright-lum-project-cypress`.
-
-**`osvVulnerabilityAlerts` jest oznaczone w Renovate jako eksperymentalne.**
-Zostawiam włączone, bo baza OSV jest odpytywana lokalnie (bez limitów zapytań),
-ale traktuj to jako sygnał, nie gwarancję, i licz się ze zmianą zachowania.
-
-**`silent.json` nie używa `mode: silent`.** Nazwa presetu jest myląca i to celowy
-kompromis — nazwa została, zachowanie się zmieniło. `mode: silent` blokuje nie
-tylko PR-y i gałęzie, ale **także utworzenie samego Dependency Dashboardu**, więc
-repo w tym trybie jest kompletnie niewidoczne. Sprawdzone uruchomieniem:
+**`silent.json` does not use `mode: silent`.** The preset name is misleading and this is an intentional
+compromise — the name remained, the behavior changed. `mode: silent` blocks not
+only PRs and branches, but **also the creation of the Dependency Dashboard itself**, so
+a repo in this mode is completely invisible. Verified by running:
 
 ```
 INFO: Repository is running with mode=silent and will not make Issues or PRs by default
 ```
 
-i w tym samym przebiegu **brak** linii `Would ensure Dependency Dashboard`, którą
-Renovate wypisuje dla repo w trybie zwykłym. Zamiast tego używamy
-`dependencyDashboardApproval: true`: dashboard powstaje i wypełnia się listą
-aktualizacji, ale żadna gałąź ani PR nie powstaje, dopóki człowiek nie odhaczy
-pozycji. Efekt jest ten, o który chodziło — widoczność bez kosztu.
+and in the same run, the `Would ensure Dependency Dashboard` line, which
+Renovate prints for a repo in normal mode, was **missing**. Instead, we use
+`dependencyDashboardApproval: true`: the dashboard is created and populated with the list of
+updates, but no branch or PR is created until a human checks off an
+item. The effect is what was intended — visibility at no cost.
 
-Uwaga na kolejność nadpisań: `mode` z presetu wygrywa z `RENOVATE_MODE` w
-zmiennych środowiskowych, więc tego nie da się obejść z linii poleceń.
+Note on override precedence: `mode` from the preset wins over `RENOVATE_MODE` in
+environment variables, so this cannot be bypassed from the command line.
+## Pitfall: validator does not check remote presets
 
-## Pułapka: walidator nie sprawdza zdalnych presetów
+`renovate-config-validator` **does not fetch** presets specified by `github>`.
+A config with an intentionally invalid `github>dudziakm/dep-automation:nie-ma-takiego`
+passes as valid for it (verified). This means that renaming a preset file
+would not be caught by validation, and would only fail on the bot,
+in every repo at once.
 
-`renovate-config-validator` **nie pobiera** presetów wskazanych przez `github>`.
-Config z celowo błędnym `github>dudziakm/dep-automation:nie-ma-takiego`
-przechodzi u niego jako poprawny (sprawdzone). Znaczy to, że zmiana nazwy pliku
-presetu nie zostałaby wyłapana przez walidację, a wysypałaby się dopiero u bota,
-w każdym repo naraz.
-
-Dlatego workflow ma osobny krok sprawdzający odniesienia między presetami po
-plikach. Pełne, prawdziwe rozwiązanie presetu daje tylko uruchomienie Renovate:
+Therefore, the workflow has a separate step checking references between presets across
+files. Full, true preset resolution is only provided by running Renovate:
 
 ```bash
 mkdir -p /tmp/rnvdry && cd /tmp/rnvdry
@@ -117,96 +113,93 @@ RENOVATE_TOKEN="$(gh auth token)" GITHUB_COM_TOKEN="$(gh auth token)" \
   npx --package renovate@latest renovate
 ```
 
-Błędna nazwa daje wtedy `config-presets-invalid` i `Cannot find preset's
+An invalid name then produces `config-presets-invalid` and `Cannot find preset's
 package`.
-
-## Skrypty
+## Scripts
 
 ```bash
-# Klasyfikacja repo pod preset. Wypisuje TSV na stdout.
+# Repo classification for preset. Outputs TSV to stdout.
 ./scripts/classify.sh > repos.tsv
 
-# Zasiew renovate.json do repo docelowych (PR na gałęzi). Domyślnie dry-run.
-./scripts/seed.sh repos.tsv            # pokazuje, co by zrobił
-APPLY=1 ./scripts/seed.sh repos.tsv    # realnie tworzy PR-y
+# Seed renovate.json to target repos (PR on branch). Dry-run by default.
+./scripts/seed.sh repos.tsv            # shows what it would do
+APPLY=1 ./scripts/seed.sh repos.tsv    # actually creates PRs
 
-# Scalenie zasianych PR-ów z gałęzi chore/renovate-config.
+# Merge seeded PRs from the chore/renovate-config branch.
 ./scripts/merge-seeded.sh repos.tsv
 
-# Rozpoznanie kształtu repo JS (manager, build, typecheck, tsconfig, liczba paczek).
+# JS repo shape detection (manager, build, typecheck, tsconfig, number of packages).
 ./scripts/shapes.sh repos.tsv
 
-# Zasiew bramki verify do aktywnych repo JS. Domyślnie dry-run.
-./scripts/seed-verify.sh repos.tsv            # pokazuje, co by zrobił
-APPLY=1 ./scripts/seed-verify.sh repos.tsv    # realnie tworzy PR-y
+# Seed verify gate to active JS repos. Dry-run by default.
+./scripts/seed-verify.sh repos.tsv            # shows what it would do
+APPLY=1 ./scripts/seed-verify.sh repos.tsv    # actually creates PRs
 ONLY=repoA,repoB APPLY=1 ./scripts/seed-verify.sh repos.tsv
 ```
 
-`repos.tsv` w repo jest snapshotem klasyfikacji, nie źródłem prawdy. Przegeneruj
-go przed każdą większą zmianą zakresu.
+`repos.tsv` in the repo is a snapshot of the classification, not a source of truth. Regenerate
+it before any major scope change.
 
-Każdy skrypt, który cokolwiek zapisuje, zaczyna od porównania `gh api user` z
-`OWNER` i przerywa przy niezgodności. To nie jest ostrożność na wyrost: na
-maszynie z kilkoma kontami `gh` push przechodzi (git ma własne poświadczenia), a
-dopiero `gh pr create` kończy się `must be a collaborator` — i zostają wypchnięte
-gałęzie bez PR-ów.
+Every script that writes anything starts by comparing `gh api user` with
+`OWNER` and aborts on mismatch. This is not excessive caution: on a
+machine with multiple `gh` accounts, push goes through (git has its own credentials), and
+only `gh pr create` ends with `must be a collaborator` — leaving pushed
+branches without PRs.
+## The verify gate and its real scope
 
-## Bramka verify i jej realny zasięg
+`templates/verify-js.yml` is an automerge prerequisite: installation from lockfile,
+`tsc --noEmit` when the repo has TypeScript in dependencies, `build` when such a
+script exists. It deliberately **does not run E2E** — Playwright and Cypress suites in these
+repos target external services, some of which no longer exist, and some block traffic
+from data center IP addresses. As a gate, they would produce noise instead of proof.
 
-`templates/verify-js.yml` to warunek wstępny automerge: instalacja z lockfile'a,
-`tsc --noEmit` gdy repo ma TypeScript w zależnościach, `build` gdy istnieje taki
-skrypt. Świadomie **nie uruchamia E2E** — zestawy Playwrighta i Cypressa w tych
-repo celują w zewnętrzne serwisy, z których część zniknęła, a część blokuje ruch
-z adresów centrów danych. Jako bramka dawałyby szum zamiast dowodu.
+The gate is confirmed by a control test, not just reasoning. In
+`testPwSetup`, `@playwright/test` was replaced with the non-existent version `1.99.99`;
+the workflow went red on the `Instalacja` step with `npm error code ETARGET`.
+After reading the result, the branch and PR were deleted.
 
-Bramka jest potwierdzona testem kontrolnym, nie tylko rozumowaniem. W
-`testPwSetup` podmieniono `@playwright/test` na nieistniejącą wersję `1.99.99`;
-workflow zapalił się na czerwono na kroku `Instalacja` z `npm error code ETARGET`.
-Po odczytaniu wyniku gałąź i PR zostały usunięte.
+However, one must know the limits of this signal:
 
-Trzeba jednak znać granice tego sygnału:
+- **Repos without `build` and without TypeScript in dependencies get an
+  install-only gate.** This applies to most test repos. `npm ci` still catches
+  a non-existent version, an out-of-sync lockfile, a `peer` conflict, and conflicting
+  `overrides` — but it will not catch behavioral regressions.
+- **`tsc --noEmit` with `skipLibCheck: true` is weaker than it seems.**
+  Verified on `web-ideas/projects/program-tv`: downgrading `next` from `^16.3.0` to
+  `14` and `lucide-react` from `^0.525.0` to `0.100.0` passed both typecheck and
+  build green.
+- Therefore, the workflow ends with a step that outputs to the job summary
+  which stages actually executed. A green install-only gate is meant to state
+  this directly, instead of pretending to have full coverage.
 
-- **Repo bez `build` i bez TypeScriptu w zależnościach dostają bramkę
-  install-only.** Dotyczy to większości repo testowych. `npm ci` nadal wyłapuje
-  nieistniejącą wersję, rozjechany lockfile, konflikt `peer` i sprzeczny
-  `overrides` — ale nie wyłapie regresji zachowania.
-- **`tsc --noEmit` przy `skipLibCheck: true` jest słabsze, niż się wydaje.**
-  Sprawdzone na `web-ideas/projects/program-tv`: downgrade `next` z `^16.3.0` na
-  `14` oraz `lucide-react` z `^0.525.0` na `0.100.0` przeszedł i typecheck, i
-  build na zielono.
-- Dlatego workflow kończy się krokiem, który wypisuje do podsumowania zadania,
-  które etapy faktycznie się wykonały. Zielona bramka install-only ma o tym
-  mówić wprost, zamiast udawać pełne pokrycie.
+Do not spread the gate wider than necessary: the repositories are private, so
+Actions minutes are actually consumed. For the same reason, the workflow has no schedule —
+it runs on PRs, on `push` to the default branch, and manually.
+## Renovate App Installation
 
-Nie rozsiewaj bramki szerzej, niż potrzeba: repozytoria są prywatne, więc minuty
-Actions realnie się zużywają. Z tego samego powodu workflow nie ma harmonogramu —
-uruchamia się na PR-ach, na `push` do gałęzi domyślnej i ręcznie.
+Seeding `renovate.json` must take place **before** installing the app. Renovate
+detects an existing config and skips the onboarding PR; without this, you will get
+onboarding with bare `config:recommended`, i.e., without this policy.
 
-## Instalacja aplikacji Renovate
+1. `APPLY=1 ./scripts/seed.sh repos.tsv` and merge the PRs.
+2. Install the app: https://github.com/apps/renovate
+3. Select repositories from the `preset` column other than `skip`.
+4. Check the Dependency Dashboard in a few repos before expanding the scope.
 
-Zasiew `renovate.json` musi nastąpić **przed** instalacją aplikacji. Renovate
-wykrywa istniejący config i pomija PR onboardingowy; bez tego dostaniesz
-onboarding z gołym `config:recommended`, czyli bez tej polityki.
+**The config alone does not run anything.** Seeding `renovate.json` to 54 repositories
+does not cause any bot action until the app is installed — not a single PR is
+created, not a single Dependency Dashboard, and there is no error message either.
+Silence looks identical to a broken config, so do not diagnose it by symptoms:
+check the list of installed applications.
 
-1. `APPLY=1 ./scripts/seed.sh repos.tsv` i scal PR-y.
-2. Zainstaluj aplikację: https://github.com/apps/renovate
-3. Wybierz repozytoria z kolumny `preset` różnej od `skip`.
-4. Sprawdź Dependency Dashboard w kilku repo, zanim rozszerzysz zakres.
-
-**Sam config niczego nie uruchamia.** Zasiew `renovate.json` do 54 repozytoriów
-nie powoduje żadnego działania bota, dopóki aplikacja nie jest zainstalowana —
-nie powstaje ani jeden PR, ani jeden Dependency Dashboard, i nie ma też żadnego
-komunikatu o błędzie. Cisza wygląda identycznie jak zepsuty config, więc nie
-diagnozuj jej po objawach: sprawdź listę zainstalowanych aplikacji.
-
-Sprawdzenie, czy bot kiedykolwiek cokolwiek zrobił (`0` = nigdy nie przebiegł):
+Checking if the bot has ever done anything (`0` = never ran):
 
 ```bash
 gh api -X GET search/issues -f q='user:dudziakm author:app/renovate' --jq .total_count
 ```
 
-Rozdzielenie „config jest zepsuty" od „bot nie działa" — dry-run lokalnie, bez
-aplikacji i bez zmian w repo:
+Distinguishing "config is broken" from "bot is not working" — dry-run locally,
+without the app and without changes to the repo:
 
 ```bash
 RENOVATE_TOKEN="$(gh auth token -u dudziakm)" \
@@ -214,17 +207,16 @@ GITHUB_COM_TOKEN="$(gh auth token -u dudziakm)" \
   npx --yes renovate --dry-run=full --platform=github dudziakm/testPwSetup
 ```
 
-Zdrowy config kończy się `"status": "activated"`, `"onboarded": true` oraz
-liniami `DRY-RUN: Would commit files to branch ...` i `Would ensure Dependency
-Dashboard`. Jeśli to widzisz, a na GitHubie nadal cisza, problem jest wyłącznie
-w zasięgu instalacji aplikacji.
+A healthy config ends with `"status": "activated"`, `"onboarded": true`, and
+the lines `DRY-RUN: Would commit files to branch ...` and `Would ensure Dependency
+Dashboard`. If you see this and there is still silence on GitHub, the issue is
+solely within the app installation scope.
 
-Aplikacja Renovate jest darmowa również dla repozytoriów prywatnych (plan Mend
-Renovate Community Cloud), więc prywatność tych repo nie jest przeszkodą. Limity
-planu darmowego to jedno zadanie równolegle na konto i przebieg co ~4 godziny —
-przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
-
-## Dokumentacja i warstwa AI
+The Renovate app is also free for private repositories (Mend Renovate Community Cloud
+plan), so the privacy of these repos is not an obstacle. The free plan limits
+are one concurrent job per account and a run every ~4 hours — with 54 repositories,
+the first full cycle takes time, so do not panic after an hour.
+## Documentation and AI layer
 
 - [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md) — manual Mend/GitHub steps to give Renovate write access
 - [`docs/AUTOMERGE-PROOF-PLAN.md`](docs/AUTOMERGE-PROOF-PLAN.md) — green-path and red-control plan once Renovate wakes
@@ -241,10 +233,7 @@ przy 54 repozytoriach pierwszy pełny obieg trwa, więc nie panikuj po godzinie.
   The same document explains where keys live: a personal GitHub account has no
   user-level Actions secrets, so they sit in this one control repository.
 
-Agent AI **nigdy nie jest bramką**: może wyłącznie zaproponować zmianę, a o tym,
-czy cokolwiek wjedzie na `main`, decydują deterministyczne checki CI i ocena
-statusu przez Renovate.
-
+The AI agent **is never a gate**: it can only propose a change, and whether anything makes it onto `main` is decided by deterministic CI checks and status evaluation by Renovate.
 ## Excluded repositories (hard rule, owner policy 2026-08-18)
 
 The repositories listed in [`EXCLUDED-REPOS.txt`](EXCLUDED-REPOS.txt) are

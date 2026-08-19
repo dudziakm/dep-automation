@@ -1,7 +1,8 @@
 name: validate ai layer
 
-# Osobny plik od validate.yml świadomie: tamten waliduje presety Renovate, ten
-# warstwę providerów. Rozdzielone, żeby błąd w jednym nie ukrywał drugiego.
+# Deliberately separate from validate.yml: that workflow validates Renovate
+# presets, while this one validates the provider layer. They are separate so an
+# error in one cannot hide an error in the other.
 
 on:
   push:
@@ -22,19 +23,19 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      # v7, nie v4: v4 działa, ale runner zgłasza ostrzeżenie o wycofaniu
-      # Node.js 20. Szablon w ai/templates/ też jest na v7 — jedna wersja w
-      # całej warstwie.
+      # v7, not v4: v4 works, but the runner reports a deprecation warning for
+      # Node.js 20. The template in ai/templates/ also uses v7 — one version
+      # across the entire layer.
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: providers.json jest poprawnym JSON-em i ma wymagane pola
+      - name: providers.json is valid JSON and has required fields
         run: |
           set -euo pipefail
           jq -e . ai/providers.json > /dev/null
 
-          # Każdy provider musi mieć cztery pola, bez których skrypt nie zadziała.
+          # Every provider must have four fields without which the script cannot work.
           braki=$(jq -r '
             .providers
             | to_entries[]
@@ -44,44 +45,43 @@ jobs:
                   or (.value.status // "") == "")
             | .key' ai/providers.json)
           if [ -n "$braki" ]; then
-            echo "::error file=ai/providers.json::niekompletne wpisy providerow: $braki"
+            echo "::error file=ai/providers.json::incomplete provider entries: $braki"
             exit 1
           fi
 
-          # Skrypt trzyma łańcuch jako listę rozdzieloną spacjami, więc nazwa
-          # providera z białym znakiem rozjechałaby go po cichu.
+          # The script stores the chain as a space-separated list, so a provider
+          # name containing whitespace would silently break it.
           zle_nazwy=$(jq -r '.providers | keys[] | select(test("\\s"))' ai/providers.json)
           if [ -n "$zle_nazwy" ]; then
-            echo "::error file=ai/providers.json::nazwy providerow nie moga zawierac bialych znakow: $zle_nazwy"
+            echo "::error file=ai/providers.json::provider names must not contain whitespace: $zle_nazwy"
             exit 1
           fi
 
-          # Łańcuch nie może wskazywać na providera, którego nie ma, ani na
-          # takiego, który jest wyłączony — inaczej domyślne wywołanie poszłoby
-          # do providera bez klucza i wywróciłoby się dopiero w locie.
-          # Rola to nazwa albo lista nazw, więc każdą spłaszczamy.
+          # The chain must not reference a non-existent or disabled provider;
+          # otherwise the default call would target a provider without a key and
+          # fail only at runtime. A role is a name or a list of names, so flatten each.
           for rola in domyslny eskalacja zapas; do
             refs=$(jq -r --arg r "$rola" \
               '[.lancuch[$r]] | flatten | map(select(type == "string" and . != "")) | .[]' ai/providers.json)
             [ -n "$refs" ] || continue
             for ref in $refs; do
               if ! jq -e --arg r "$ref" '.providers | has($r)' ai/providers.json > /dev/null; then
-                echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na nieistniejacego providera '$ref'"
+                echo "::error file=ai/providers.json::lancuch.${rola} references nonexistent provider '$ref'"
                 exit 1
               fi
               pstatus=$(jq -r --arg r "$ref" '.providers[$r].status' ai/providers.json)
               if [ "$pstatus" != "aktywny" ]; then
-                echo "::error file=ai/providers.json::lancuch.${rola} wskazuje na '$ref', ktory ma status '$pstatus' zamiast 'aktywny'"
+                echo "::error file=ai/providers.json::lancuch.${rola} references '$ref', which has status '$pstatus' instead of 'aktywny'"
                 exit 1
               fi
             done
           done
 
-          # Provider odstawiony na bok ma prawo mieć status 'wyłączony', ale nie
-          # ma prawa udawać aktywnego — status 'aktywny' poza łańcuchem znaczy,
-          # że ktoś zapomniał go dopisać do łańcucha albo przełączyć. Dziś każdy
-          # wpis jest aktywny i w łańcuchu, więc ta reguła pilnuje przyszłych
-          # dopisań, a nie stanu obecnego.
+          # A sidelined provider may be disabled, but must not pretend to be
+          # active — status 'aktywny' outside the chain means someone forgot
+          # to add it to the chain or disable it. Today every entry is active and
+          # in the chain, so this rule protects future additions rather than the
+          # current state.
           osierocone=$(jq -r '
             ([.lancuch.domyslny, .lancuch.eskalacja, .lancuch.zapas]
              | flatten
@@ -93,12 +93,12 @@ jobs:
             | . as $nazwa
             | select(($chain | index($nazwa)) == null)' ai/providers.json)
           if [ -n "$osierocone" ]; then
-            echo "::error file=ai/providers.json::providerzy ze statusem 'aktywny' poza lancuchem: $osierocone"
+            echo "::error file=ai/providers.json::providers with status 'aktywny' outside the chain: $osierocone"
             exit 1
           fi
 
-          # Nadpisania parametrów trafiają do zapytania przez jq --argjson, więc
-          # wartość nieliczbowa wywróciłaby wywołanie dopiero w locie.
+          # Parameter overrides enter the request through jq --argjson, so a
+          # non-numeric value would fail only at runtime.
           zle_parametry=$(jq -r '
             .providers
             | to_entries[]
@@ -109,28 +109,28 @@ jobs:
             | select((.key | test("^(max_tokens|temperature)$")) and (.value | type) != "number")
             | "\($k).\(.key)"' ai/providers.json)
           if [ -n "$zle_parametry" ]; then
-            echo "::error file=ai/providers.json::nadpisania parametrow musza byc liczbami: $zle_parametry"
+            echo "::error file=ai/providers.json::parameter overrides must be numbers: $zle_parametry"
             exit 1
           fi
 
-      - name: w konfiguracji nie ma wartosci sekretow, tylko ich nazwy
+      - name: configuration has secret names only, never values
         run: |
           set -euo pipefail
-          # Kontrola higieny: żaden ciąg wyglądający jak klucz API nie ma prawa
-          # trafić do repo. Wzorce pokrywają formaty Google, DeepSeeka i OpenRoutera.
+          # Hygiene check: no string that looks like an API key may enter the
+          # repository. The patterns cover Google, DeepSeek, and OpenRouter formats.
           if grep -rEn 'AIza[0-9A-Za-z_-]{30,}|sk-[0-9a-zA-Z]{20,}|sk-or-v1-[0-9a-f]{16,}' ai/; then
-            echo "::error::w katalogu ai/ znaleziono ciag wygladajacy jak klucz API"
+            echo "::error::found a string resembling an API key in the ai/ directory"
             exit 1
           fi
-          echo "brak sladow sekretow — OK"
+          echo "no traces of secrets — OK"
 
-      - name: shellcheck i bash -n
+      - name: shellcheck and bash -n
         run: |
           set -euo pipefail
           shellcheck ai/scripts/*.sh
           for f in ai/scripts/*.sh; do bash -n "$f"; done
 
-      - name: szablony workflow sa poprawnym YAML-em
+      - name: workflow templates are valid YAML
         run: |
           set -euo pipefail
           for f in ai/templates/*.yml; do
@@ -138,21 +138,21 @@ jobs:
             echo "$f OK"
           done
 
-      - name: skrypt dziala bez sekretow w trybach informacyjnych
+      - name: script works without secrets in informational modes
         run: |
           set -euo pipefail
           bash ai/scripts/ai-call.sh --list
           bash ai/scripts/ai-call.sh --check
 
-      - name: bez sekretow realne wywolanie konczy sie kodem 3, nie sukcesem
+      - name: without secrets, a real call exits with code 3 rather than succeeding
         run: |
           set -euo pipefail
-          # Test kontrolny na zachowanie fail-closed: brak kluczy nie może dać
-          # exit 0, bo wywołujący uznałby brak odpowiedzi za pustą odpowiedź.
+          # Control test for fail-closed behavior: missing keys must not result
+          # in exit 0, as the caller would treat no response as an empty response.
           rc=0
           echo "test" | bash ai/scripts/ai-call.sh > /dev/null 2>&1 || rc=$?
           if [ "$rc" -ne 3 ]; then
-            echo "::error::oczekiwano kodu 3 przy braku sekretow, otrzymano $rc"
+            echo "::error::expected code 3 when secrets are missing, got $rc"
             exit 1
           fi
-          echo "fail-closed potwierdzony — kod 3"
+          echo "fail-closed confirmed — code 3"
