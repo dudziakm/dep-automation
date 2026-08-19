@@ -918,13 +918,61 @@ scope was reversed once (an earlier temporary opt-in of cards/rules/compass was
 withdrawn); this exclusion is the final state. The machine-readable list lives in
 `EXCLUDED-REPOS.txt` and the seeding scripts skip anything in it.
 
-## Status as of 2026-08-19
+## Status as of 2026-08-19 midday (~12:30 local)
 
-- Renovate remains silent: `renovate[bot]` still has `permission: none` on
-  pilots. Owner action: [`OWNER-RENOVATE-CHECKLIST.md`](OWNER-RENOVATE-CHECKLIST.md).
-- Automerge proof waits on first real Renovate PRs:
-  [`AUTOMERGE-PROOF-PLAN.md`](AUTOMERGE-PROOF-PLAN.md).
-- Do **not** privatize `dep-automation` until Renovate successfully resolves
-  public presets.
-- `validate.yml` uses `actions/checkout@v5` + `actions/setup-node@v5` (Node 24
-  action runtime) to clear the Node 20 deprecation warning.
+The Mend-hosted Renovate App path is **dead**. Self-hosted Renovate in
+`dudziakm/dep-automation` Actions is the source of truth
+([PR #15](https://github.com/dudziakm/dep-automation/pull/15) merged). Secret
+`RENOVATE_TOKEN` writes Contents / Issues / PRs / Workflows; Commit statuses
+read. Frozen 10x/concept repos were never started.
+
+### Done
+
+- Hard exclusion holds: `AGENTS.md`, `EXCLUDED-REPOS.txt`, `seed.sh`, Cursor
+  hook, runner `autodiscoverFilter`. Frozen names have **0** open PRs and **0**
+  `renovate/*` branches.
+- Verify expansion: remaining in-scope verify PRs green+merged, including the
+  three that were red (`playwright-lum-project-cypress#27`, `rag-course-guide#31`,
+  `aidevsApiTasks#44`).
+- `js-yaml` CVE already closed; floors raised (`testBasketPw#7`,
+  `playwright-lum-project#8`).
+- Polish leftovers in this repo: [#13](https://github.com/dudziakm/dep-automation/pull/13)
+  merged.
+- Live write after PAT replace: [run 32233411110](https://github.com/dudziakm/dep-automation/actions/runs/32233411110)
+  — 97 repos, 23 PRs, 17 dashboards, 55 branches, **0 write 403s**. Frozen 0.
+- Repeat before abort-fix: [run 32235618310](https://github.com/dudziakm/dep-automation/actions/runs/32235618310)
+  — same abort pattern (`repository-changed`); automerge **red** held
+  (`openReel#27` major+security still open); **green not proven**.
+- Abort-fix config **landed** (do not duplicate):
+  [#17](https://github.com/dudziakm/dep-automation/pull/17) merged 09:38Z —
+  `statusCheckNames.minimumReleaseAge: null` and `prCreation: "immediate"` on
+  `main`. Follow-up live runs
+  [32238712291](https://github.com/dudziakm/dep-automation/actions/runs/32238712291)
+  and [32240823653](https://github.com/dudziakm/dep-automation/actions/runs/32240823653)
+  opened JS-pilot PRs. Public presets already resolve on this runner.
+
+### Live inventory (read-only, 2026-08-19 ~12:30 local)
+
+Open PRs with head `renovate/` on `user:dudziakm`: **97** across **43** repos,
+author `dudziakm` (self-hosted PAT — **0** `author:app/renovate`). **None** on
+the five frozen repos.
+
+Green automerge candidate is already open and verify-green:
+[nord-fjord-rag-guide#49](https://github.com/dudziakm/nord-fjord-rag-guide/pull/49)
+(`cors` patch `v2.8.6`, `MERGEABLE` / `CLEAN`, verify SUCCESS). Renovate has
+not merged it yet (`automergeType: pr`, `platformAutomerge: false`). Red
+control still held: [openReel#27](https://github.com/dudziakm/openReel/pull/27).
+
+### Remaining (5)
+
+1. **Automerge green proof** — wait for a Renovate run to merge
+   `nord-fjord-rag-guide#49`. Do not force-merge. Playwright PRs on
+   `testPwSetup` / `coachingDocs` do **not** count (exclusion list).
+2. Optional: PAT **Dependabot alerts: Read** (log WARN, not a write 403).
+3. Private `dep-automation` only after preset-fetch is proven on self-hosted
+   (now likely OK — public presets already work).
+4. Drain leftover Dependabot PRs once Renovate is the source of truth.
+5. Optional: smoke / English schema keys in `ai/providers.json` / canvas polish.
+
+Owner-facing runbook: [`OWNER-RENOVATE-CHECKLIST.md`](OWNER-RENOVATE-CHECKLIST.md).
+Do **not** trigger Renovate from a docs update. Do **not** touch frozen repos.
