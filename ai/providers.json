@@ -1,18 +1,18 @@
 {
   "wersja": 2,
-  "opis": "Warstwa providerów AI dla agenta naprawiającego padające buildy po podbiciu zależności. Wszystkie wpisy mówią OpenAI-compatible /chat/completions, więc przełączenie providera to zmiana base_url + sekretu + modelu. Nazwy sekretów, nigdy wartości.",
+  "opis": "AI provider layer for an agent that fixes failing builds after dependency upgrades. All entries use OpenAI-compatible /chat/completions, so switching providers changes the base_url, secret, and model only. Secret names, never values.",
   "lancuch": {
     "domyslny": "deepseek",
     "eskalacja": "deepseek-pro",
     "zapas": ["openrouter", "kimi"],
-    "uwaga_format": "Każda rola przyjmuje nazwę providera albo listę nazw próbowanych po kolei. Dzięki temu dopisanie kolejnego zapasu jest zmianą danych, a nie kodu."
+    "uwaga_format": "Each role accepts a provider name or a list of names tried in order. This makes adding another fallback a data change rather than a code change."
   },
   "domyslne_parametry": {
     "max_tokens": 4096,
     "temperature": 0,
     "timeout_s": 120,
-    "uwaga_max_tokens": "Tokeny myślenia liczą się jako output i są wliczane w max_tokens. Przy zbyt małym max_tokens odpowiedź wraca pusta z finish_reason=length — zmierzone empirycznie na DeepSeeku, na Gemini przez OpenRouter i na Kimi.",
-    "uwaga_parametry": "Provider może nadpisać dowolny z tych parametrów własnym blokiem 'parametry'. To nie kosmetyka: Kimi odrzuca temperature inną niż 1 błędem HTTP 400, więc bez nadpisania nie odpowiedziałby ani razu."
+    "uwaga_max_tokens": "Reasoning tokens count as output and are included in max_tokens. If max_tokens is too small, the response returns empty with finish_reason=length — measured empirically on DeepSeek, Gemini through OpenRouter, and Kimi.",
+    "uwaga_parametry": "A provider can override any of these parameters in its own 'parametry' block. This is not cosmetic: Kimi rejects a temperature other than 1 with HTTP 400, so without the override it would never return a response."
   },
   "providers": {
     "deepseek": {
@@ -20,8 +20,8 @@
       "model": "deepseek-v4-flash",
       "secret": "DEEPSEEK_API_KEY",
       "status": "aktywny",
-      "rola": "domyślny",
-      "notatka": "Główny punkt dostępu. Tani, szybki, API zgodne z OpenAI potwierdzone empirycznie. Pierwsze podejście do każdego padniętego builda.",
+      "rola": "default",
+      "notatka": "Primary access point. Cheap, fast, with an empirically confirmed OpenAI-compatible API. First attempt for every failed build.",
       "cennik_usd_za_1M": {
         "input_cache_hit_off_peak": 0.007,
         "input_cache_hit_peak": 0.014,
@@ -38,8 +38,8 @@
       "model": "deepseek-v4-pro",
       "secret": "DEEPSEEK_API_KEY",
       "status": "aktywny",
-      "rola": "eskalacja",
-      "notatka": "Trudniejszy przypadek: Flash nie odpowiedział, odpowiedział błędem albo wyszedł pusty. Ten sam klucz i ten sam base_url co Flash — eskalacja to wyłącznie zmiana nazwy modelu. Trzykrotnie droższy od Flasha i ma niższy limit współbieżności (500 vs 2500).",
+      "rola": "escalation",
+      "notatka": "Harder case: Flash did not respond, returned an error, or returned empty. It uses the same key and base_url as Flash — escalation changes only the model name. It is three times more expensive than Flash and has a lower concurrency limit (500 vs. 2500).",
       "cennik_usd_za_1M": {
         "input_cache_hit_off_peak": 0.022,
         "input_cache_hit_peak": 0.044,
@@ -56,8 +56,8 @@
       "model": "google/gemini-3.7-flash",
       "secret": "OPENROUTER_API_KEY",
       "status": "aktywny",
-      "rola": "zapas",
-      "notatka": "Awaryjne wyjście, gdy DeepSeek jest niedostępny (429, 5xx, awaria dostawcy). Niezależny dostawca i niezależny klucz, więc awaria DeepSeeka go nie dotyka. Daje też dostęp do modeli Gemini bez posiadania klucza Google — potwierdzone empirycznie.",
+      "rola": "fallback",
+      "notatka": "Emergency fallback when DeepSeek is unavailable (429, 5xx, provider outage). It has an independent provider and key, so a DeepSeek outage does not affect it. It also provides access to Gemini models without a Google key — confirmed empirically.",
       "cennik_usd_za_1M": { "input": 0.375, "output": 1.875 },
       "darmowy_tier": false,
       "zrodlo_cennika": "https://openrouter.ai/api/v1/models"
@@ -67,12 +67,12 @@
       "model": "kimi-k2.7-code",
       "secret": "KIMI_API_KEY",
       "status": "aktywny",
-      "rola": "zapas",
+      "rola": "fallback",
       "parametry": {
         "temperature": 1,
         "max_tokens": 16384
       },
-      "notatka": "Drugi niezależny zapas, po OpenRouterze. Trzeci dostawca i trzeci klucz w łańcuchu, więc awaria DeepSeeka ani OpenRoutera go nie dotyczy. Model wyspecjalizowany pod kod — w cenie modelu ogólnego kimi-k2.6 (identyczne 0,95/4,00), więc specjalizacja nic nie kosztuje. Host globalny api.moonshot.ai; api.moonshot.cn odrzuca ten klucz kodem 401. Dwa wymuszone nadpisania parametrów: temperature musi być 1 (inna wartość to HTTP 400) i max_tokens musi być wyższe niż domyślne 4096, bo przy 4096 odpowiedź potrafi wyjść pusta z finish_reason=length — zmierzone. Konto jest na najniższym progu limitów (RPM 3, współbieżność 1), co jest osobnym powodem, żeby był zapasem, a nie domyślnym.",
+      "notatka": "Second independent fallback, after OpenRouter. It is the third provider and third key in the chain, so neither a DeepSeek nor OpenRouter outage affects it. A code-specialized model at the price of the general kimi-k2.6 model (the same 0.95/4.00), so the specialization costs nothing. Its global host is api.moonshot.ai; api.moonshot.cn rejects this key with 401. Two required parameter overrides apply: temperature must be 1 (any other value returns HTTP 400) and max_tokens must exceed the default 4096, because at 4096 the response can be empty with finish_reason=length — measured. The account is in the lowest limits tier (RPM 3, concurrency 1), which is another reason it is a fallback rather than the default.",
       "cennik_usd_za_1M": {
         "input_cache_hit": 0.19,
         "input_cache_miss": 0.95,
