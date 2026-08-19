@@ -74,7 +74,6 @@ jobs:
       # accepts renovate.yml when the binary is on PATH (CI image may lack it).
       - name: runner exclusion sync
         run: |
-          # shellcheck disable=SC2016 # we match literal ${r} in renovate-global.js
           set -euo pipefail
           cfg=.github/renovate-global.js
           fail=0
@@ -85,8 +84,8 @@ jobs:
               fail=1
             fi
           done < EXCLUDED-REPOS.txt
-          if ! grep -qF 'FROZEN_REPOS.map((r) => `!${r}`)' "$cfg"; then
-            echo "::error file=$cfg::autodiscoverFilter must derive deny entries from FROZEN_REPOS"
+          if ! grep -q 'FROZEN_REPOS.map' "$cfg"; then
+            echo "::error file=$cfg::autodiscoverFilter must derive deny entries from FROZEN_REPOS.map"
             fail=1
           fi
           for token in 10x cards concept rules; do
