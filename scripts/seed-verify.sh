@@ -14,7 +14,7 @@ ONLY="${ONLY:-}"
 WORK="${WORK:-/tmp/seed-verify}"
 TPL="${TPL:-templates/verify-js.yml}"
 
-# Hard exclusion: never seed repos listed in EXCLUDED-REPOS.txt (owner policy 2026-08-18).
+# Skip repos listed in EXCLUDED-REPOS.txt (comment-only file = none skipped).
 EXCLUDE_FILE="$(dirname "$0")/../EXCLUDED-REPOS.txt"
 # shellcheck disable=SC2317,SC2329  # called from the loop below
 is_excluded() {
