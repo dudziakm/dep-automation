@@ -185,7 +185,8 @@ in this repository, with discovery rules in
 - Schedule: every 6 hours, plus `workflow_dispatch` (dry-run toggle, log level).
 - Secret: `RENOVATE_TOKEN` (fine-grained PAT). See
   [`docs/OWNER-RENOVATE-CHECKLIST.md`](docs/OWNER-RENOVATE-CHECKLIST.md).
-- Frozen repos are excluded in the runner config **and** in `EXCLUDED-REPOS.txt`.
+- Discovery is `dudziakm/*` (`requireConfig: required`). `EXCLUDED-REPOS.txt` has
+  no names after the 2026-09-01 re-permit of 10xdevs / compass / cards / rules.
 
 Target repos still only need their one-line `renovate.json` extending these
 presets; do not duplicate policy into the runner.
@@ -216,15 +217,9 @@ gh api -X GET search/issues -f q='user:dudziakm "Dependency Dashboard" in:title'
   user-level Actions secrets, so they sit in this one control repository.
 
 The AI agent **is never a gate**: it can only propose a change, and whether anything makes it onto `main` is decided by deterministic CI checks and status evaluation by Renovate.
-## Excluded repositories (hard rule, owner policy 2026-08-18)
+## 10xdevs / compass (re-permitted 2026-09-01)
 
-The repositories listed in [`EXCLUDED-REPOS.txt`](EXCLUDED-REPOS.txt) are
-permanently out of scope for dependency automation until the owner officially
-re-permits them: no Renovate onboarding, no verify gate, no automerge, no
-override or security PRs, no commits or merges.
-
-This currently covers `ai-concept-compass`, `ai-concept-compass-greenfield`,
-`10xCardsAstro`, `my10xCards`, `ai-rules-builder`, and the "10x devs" / "concept
-AI" repositories in general. The exclusion is the owner's final decision after
-an earlier temporary opt-in was reversed; a generic "do all repos" instruction
-does not override it.
+`ai-concept-compass`, `ai-concept-compass-greenfield`, `10xCardsAstro`,
+`my10xCards`, and `ai-rules-builder` are in scope. Prefer the smallest bump
+that closes an advisory and verify locally before merge. Framework majors stay
+manual unless the advisory requires them and the build stays green.
