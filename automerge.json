@@ -11,9 +11,9 @@
       "automergeType": "pr"
     },
     {
-      "description": "Runtime dependencies: patch only. A minor can change behaviour that install and build never exercise.",
+      "description": "Runtime dependencies: patch and minor. A minor can change behaviour that install and build never exercise, which is the accepted risk here - the alternative was a standing queue of green security fixes waiting on a human. Majors and the tool list below are still excluded.",
       "matchDepTypes": ["dependencies"],
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": ["patch", "minor"],
       "automerge": true,
       "automergeType": "pr"
     },
