@@ -63,36 +63,7 @@
   },
 
   "vulnerabilityAlerts": {
-    "description": "A repository on this preset has the verify gate, so a vulnerability fix can merge on a green status. Renovate already takes the lowest version that closes the advisory, which keeps the diff to a patch in most cases. The rules below keep the same exclusions as the regular updates above, because vulnerabilityAlerts is an overlay and would otherwise ignore them.",
-    "automerge": true,
-    "automergeType": "pr",
-    "labels": ["security"],
-    "packageRules": [
-      {
-        "description": "A major stays manual even when it closes an advisory - Astro 7 rewrites the config, not just the dependency.",
-        "matchUpdateTypes": ["major"],
-        "automerge": false
-      },
-      {
-        "description": "Tools that are themselves configuration stay manual, same list as the regular updates.",
-        "matchPackageNames": [
-          "eslint",
-          "typescript",
-          "vite",
-          "vitest",
-          "@vitejs/plugin-react",
-          "react",
-          "react-dom",
-          "astro",
-          "cypress",
-          "@playwright/test",
-          "playwright",
-          "playwright-core",
-          "node",
-          "@types/node"
-        ],
-        "automerge": false
-      }
-    ]
+    "description": "No automerge key here on purpose. This object is an overlay that Renovate applies after the packageRules above, and an automerge set here wins over all of them - including the major and the tool exclusions, which a dry run confirmed by offering to automerge an Astro vulnerability fix. Leaving the key out lets a vulnerability fix fall through to the same rules as any other update, so a patch merges on a green gate while a major or a tool stays manual.",
+    "labels": ["security"]
   }
 }

@@ -33,7 +33,6 @@
   "vulnerabilityAlerts": {
     "enabled": true,
     "minimumReleaseAge": null,
-    "automerge": false,
     "labels": ["security"]
   },
 
