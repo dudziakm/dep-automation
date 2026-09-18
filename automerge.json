@@ -11,9 +11,9 @@
       "automergeType": "pr"
     },
     {
-      "description": "Runtime dependencies: patch only. A minor can change behaviour that install and build never exercise.",
+      "description": "Runtime dependencies: patch and minor. A minor can change behaviour that install and build never exercise, which is the accepted risk here - the alternative was a standing queue of green security fixes waiting on a human. Majors and the tool list below are still excluded.",
       "matchDepTypes": ["dependencies"],
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": ["patch", "minor"],
       "automerge": true,
       "automergeType": "pr"
     },
@@ -63,7 +63,7 @@
   },
 
   "vulnerabilityAlerts": {
-    "automerge": false,
+    "description": "No automerge key here on purpose. This object is an overlay that Renovate applies after the packageRules above, and an automerge set here wins over all of them - including the major and the tool exclusions, which a dry run confirmed by offering to automerge an Astro vulnerability fix. Leaving the key out lets a vulnerability fix fall through to the same rules as any other update, so a patch merges on a green gate while a major or a tool stays manual.",
     "labels": ["security"]
   }
 }
