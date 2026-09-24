@@ -56,13 +56,13 @@ else
 fi
 
 if [[ -x ./mvnw ]]; then
-  ./mvnw --batch-mode test
+  ./mvnw --batch-mode -DskipTests package
 elif [[ -f pom.xml ]]; then
-  mvn --batch-mode test
+  mvn --batch-mode -DskipTests package
 fi
 
 if [[ -x ./gradlew ]]; then
-  ./gradlew test
+  ./gradlew classes testClasses
 fi
 
 if [[ -f pyproject.toml && -f uv.lock ]]; then
