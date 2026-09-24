@@ -102,11 +102,11 @@ jobs:
                   "api",
                   f"repos/dudziakm/{repo}/commits/{sha}/status",
               )
-              already_green = any(
-                  status["context"] == "verify" and status["state"] == "success"
+              already_verified = any(
+                  status["context"] == "verify"
                   for status in combined.get("statuses", [])
               )
-              if already_green and not repository:
+              if already_verified and not repository:
                   continue
 
               include.append({
