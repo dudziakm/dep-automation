@@ -14,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run only (log actions, create no PRs or branches)'
+        description: 'Dry run only (log actions, create no PRs or branches). Cron always runs live. Default false so a manual dispatch also creates and merges PRs.'
         type: boolean
-        default: true
+        default: false
       log_level:
         description: 'Renovate log level'
         type: choice
