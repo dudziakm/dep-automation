@@ -133,7 +133,7 @@ jobs:
     steps:
       - name: Mark verification pending
         env:
-          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
         run: |
           gh api "repos/dudziakm/${{ matrix.repository }}/statuses/${{ matrix.sha }}" \
             -f state=pending \
@@ -164,7 +164,7 @@ jobs:
       - name: Publish verification result
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         run: |
           if [[ "$VERIFY_OUTCOME" == success ]]; then
