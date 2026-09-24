@@ -1,0 +1,181 @@
+name: verify dependency PRs on Mac
+
+on:
+  schedule:
+    # Renovate runs at :15. Give it time to create/update branches first.
+    - cron: '45 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository name without dudziakm/ (optional)'
+        type: string
+        required: false
+      pr_number:
+        description: 'PR number; required when repository is set'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-dependency-prs-mac
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      count: ${{ steps.matrix.outputs.count }}
+    steps:
+      - id: matrix
+        env:
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          INPUT_REPOSITORY: ${{ inputs.repository }}
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import subprocess
+
+          def gh(*args):
+              result = subprocess.run(
+                  ["gh", *args],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              return json.loads(result.stdout)
+
+          repository = os.environ.get("INPUT_REPOSITORY", "").strip()
+          pr_number = os.environ.get("INPUT_PR_NUMBER", "").strip()
+
+          if bool(repository) != bool(pr_number):
+              raise SystemExit("repository and pr_number must be supplied together")
+
+          if repository:
+              candidates = [{
+                  "repository": {"name": repository},
+                  "number": int(pr_number),
+                  "title": "manual selection",
+                  "createdAt": "",
+              }]
+          else:
+              candidates = gh(
+                  "search", "prs",
+                  "--owner", "dudziakm",
+                  "--state", "open",
+                  "--limit", "100",
+                  "--json", "repository,number,title,createdAt",
+              )
+              candidates = [
+                  pr for pr in candidates
+                  if pr["title"].startswith(("chore(deps)", "fix(deps)", "build(deps)"))
+              ]
+              candidates.sort(
+                  key=lambda pr: (
+                      "[security]" not in pr["title"],
+                      pr["createdAt"],
+                  )
+              )
+
+          include = []
+          for candidate in candidates:
+              repo = candidate["repository"]["name"]
+              number = candidate["number"]
+              details = gh(
+                  "pr", "view", str(number),
+                  "--repo", f"dudziakm/{repo}",
+                  "--json", "headRefOid,headRefName,title",
+              )
+              sha = details["headRefOid"]
+
+              combined = gh(
+                  "api",
+                  f"repos/dudziakm/{repo}/commits/{sha}/status",
+              )
+              already_green = any(
+                  status["context"] == "verify" and status["state"] == "success"
+                  for status in combined.get("statuses", [])
+              )
+              if already_green and not repository:
+                  continue
+
+              include.append({
+                  "repository": repo,
+                  "pr": number,
+                  "sha": sha,
+                  "branch": details["headRefName"],
+                  "title": details["title"],
+              })
+              if not repository and len(include) == 12:
+                  break
+
+          matrix = json.dumps({"include": include}, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"matrix={matrix}\n")
+              output.write(f"count={len(include)}\n")
+          print(json.dumps(include, indent=2))
+          PY
+
+  verify:
+    needs: discover
+    if: needs.discover.outputs.count != '0'
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 45
+    name: ${{ matrix.repository }}#${{ matrix.pr }}
+    steps:
+      - name: Mark verification pending
+        env:
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+        run: |
+          gh api "repos/dudziakm/${{ matrix.repository }}/statuses/${{ matrix.sha }}" \
+            -f state=pending \
+            -f context=verify \
+            -f description='Mac dependency verification is running' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out verification scripts
+        uses: actions/checkout@v5
+        with:
+          path: automation
+          persist-credentials: false
+
+      - name: Check out target PR
+        uses: actions/checkout@v5
+        with:
+          repository: dudziakm/${{ matrix.repository }}
+          ref: ${{ matrix.sha }}
+          token: ${{ secrets.RENOVATE_TOKEN }}
+          path: target
+          persist-credentials: false
+          clean: true
+
+      - id: verify
+        name: Install, typecheck, build, and test
+        run: bash automation/scripts/verify-target.sh target
+
+      - name: Publish verification result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        run: |
+          if [[ "$VERIFY_OUTCOME" == success ]]; then
+            state=success
+            description='Mac dependency verification passed'
+          else
+            state=failure
+            description='Mac dependency verification failed'
+          fi
+          gh api "repos/dudziakm/${{ matrix.repository }}/statuses/${{ matrix.sha }}" \
+            -f state="$state" \
+            -f context=verify \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
