@@ -68,15 +68,21 @@ jobs:
                   "--owner", "dudziakm",
                   "--state", "open",
                   "--limit", "100",
-                  "--json", "repository,number,title,createdAt",
+                  "--json", "repository,number,title,createdAt,labels",
               )
               candidates = [
                   pr for pr in candidates
-                  if pr["title"].startswith(("chore(deps)", "fix(deps)", "build(deps)"))
+                  if (
+                      pr["title"].startswith(("chore(deps)", "fix(deps)", "build(deps)"))
+                      or any(label["name"] == "security" for label in pr["labels"])
+                  )
               ]
               candidates.sort(
                   key=lambda pr: (
-                      "[security]" not in pr["title"],
+                      not (
+                          "[security]" in pr["title"]
+                          or any(label["name"] == "security" for label in pr["labels"])
+                      ),
                       pr["createdAt"],
                   )
               )
