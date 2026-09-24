@@ -185,3 +185,30 @@ jobs:
             -f context=verify \
             -f description="$description" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Hand verified PR to GitHub automerge
+        if: steps.verify.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
+        run: |
+          repo="dudziakm/${{ matrix.repository }}"
+          pr="${{ matrix.pr }}"
+          expected_sha="${{ matrix.sha }}"
+
+          current_sha="$(gh pr view "$pr" --repo "$repo" --json headRefOid --jq .headRefOid)"
+          if [[ "$current_sha" != "$expected_sha" ]]; then
+            echo "PR changed during verification; leaving the new revision for the next run."
+            exit 0
+          fi
+
+          automerge="$(
+            gh pr view "$pr" --repo "$repo" --json body \
+              --jq '.body | contains("🚦 **Automerge**: Enabled.")'
+          )"
+          if [[ "$automerge" != true ]]; then
+            echo "Renovate marked this update for manual merge."
+            exit 0
+          fi
+
+          gh pr merge "$pr" --repo "$repo" --squash --auto
