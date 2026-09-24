@@ -73,7 +73,11 @@ jobs:
               candidates = [
                   pr for pr in candidates
                   if (
-                      pr["title"].startswith(("chore(deps)", "fix(deps)", "build(deps)"))
+                      pr["title"].startswith((
+                          "chore(deps)", "chore(deps-dev)",
+                          "fix(deps)", "fix(deps-dev)",
+                          "build(deps)", "build(deps-dev)",
+                      ))
                       or any(label["name"] == "security" for label in pr["labels"])
                   )
               ]
