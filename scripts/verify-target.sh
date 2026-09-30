@@ -102,3 +102,13 @@ elif [[ -f requirements.txt ]]; then
     .verify-venv/bin/pytest
   fi
 fi
+
+# Nested requirements files are usually deploy targets (lambdas, jobs) that the
+# root install never touches. Resolve the ones this PR changed, so a bump that
+# leaves the pins unsatisfiable fails here instead of at deploy time.
+while IFS= read -r req; do
+  [[ "$req" == */requirements.txt && -f "$req" ]] || continue
+  echo "::group::Resolve ${req}"
+  uv pip compile --python-version 3.12 --quiet "$req" -o "${RUNNER_TEMP:-/tmp}/resolved-requirements.txt"
+  echo "::endgroup::"
+done <<< "${VERIFY_CHANGED_FILES:-}"
