@@ -189,7 +189,12 @@ jobs:
 
       - id: verify
         name: Install, typecheck, build, and test
-        run: bash automation/scripts/verify-target.sh target
+        env:
+          GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
+        run: |
+          VERIFY_CHANGED_FILES="$(gh pr view "${{ matrix.pr }}" --repo "dudziakm/${{ matrix.repository }}" --json files --jq '.files[].path')"
+          export VERIFY_CHANGED_FILES
+          bash automation/scripts/verify-target.sh target
 
       - name: Publish verification result
         # A skipped verify means the runner was not fit to run it; leaving the
