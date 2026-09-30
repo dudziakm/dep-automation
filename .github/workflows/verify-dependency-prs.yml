@@ -228,13 +228,32 @@ jobs:
             exit 0
           fi
 
+          # Renovate names a major "to v40" and anything smaller "to v2.1.7", so a
+          # security fix that is not a major merges on a green gate even in repos
+          # that never opted into the automerge preset.
           automerge="$(
-            gh pr view "$pr" --repo "$repo" --json body \
-              --jq '.body | contains("🚦 **Automerge**: Enabled.")'
+            gh pr view "$pr" --repo "$repo" --json body,title,labels,headRefName \
+              --jq '(.body | contains("🚦 **Automerge**: Enabled."))
+                    or ((.headRefName | startswith("renovate/"))
+                        and ([.labels[].name] | index("security") != null)
+                        and (.title | test(" to v[0-9]+\\.[0-9]+")))'
           )"
           if [[ "$automerge" != true ]]; then
             echo "Renovate marked this update for manual merge."
             exit 0
           fi
 
-          gh pr merge "$pr" --repo "$repo" --squash --auto
+          if [[ "$(gh api "repos/$repo" --jq .allow_auto_merge)" == true ]]; then
+            gh pr merge "$pr" --repo "$repo" --squash --auto
+          else
+            for _ in $(seq 20); do
+              state="$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus --jq .mergeStateStatus)"
+              [[ "$state" == CLEAN || "$state" == DIRTY ]] && break
+              sleep 30
+            done
+            if [[ "$state" == CLEAN ]]; then
+              gh pr merge "$pr" --repo "$repo" --squash --delete-branch
+            else
+              echo "Repository has auto-merge disabled and the PR is $state; leaving it for the next run."
+            fi
+          fi
