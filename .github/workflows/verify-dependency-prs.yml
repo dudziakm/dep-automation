@@ -39,6 +39,7 @@ jobs:
           import json
           import os
           import subprocess
+          from datetime import datetime, timedelta, timezone
 
           def gh(*args):
               result = subprocess.run(
@@ -106,8 +107,15 @@ jobs:
                   "api",
                   f"repos/dudziakm/{repo}/commits/{sha}/status",
               )
+              # A job that dies with the runner never publishes its result, so a
+              # pending status older than a batch can take is treated as stale.
+              stale_before = datetime.now(timezone.utc) - timedelta(hours=3)
               already_verified = any(
                   status["context"] == "verify"
+                  and (
+                      status["state"] != "pending"
+                      or datetime.fromisoformat(status["updated_at"].replace("Z", "+00:00")) > stale_before
+                  )
                   for status in combined.get("statuses", [])
               )
               if already_verified and not repository:
@@ -167,12 +175,26 @@ jobs:
           persist-credentials: false
           clean: true
 
+      - name: Ensure free disk space
+        run: |
+          free_gb() { df -g "$RUNNER_WORKSPACE" | awk 'NR==2 {print $4}'; }
+          if (( $(free_gb) < 15 )); then
+            npm cache clean --force
+          fi
+          echo "Free disk space: $(free_gb) GB"
+          if (( $(free_gb) < 8 )); then
+            echo "::error::Less than 8 GB free on the Mac runner; refusing to install."
+            exit 1
+          fi
+
       - id: verify
         name: Install, typecheck, build, and test
         run: bash automation/scripts/verify-target.sh target
 
       - name: Publish verification result
-        if: always()
+        # A skipped verify means the runner was not fit to run it; leaving the
+        # status pending lets discover retry the revision once it goes stale.
+        if: always() && steps.verify.outcome != 'skipped'
         env:
           GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
