@@ -46,6 +46,11 @@ verify_node_project() {
       fi
     done
 
+    # Fast offline tests only. Do not run `test`: in some repos that is Playwright or Cypress.
+    if node -e "const s=require('./package.json').scripts||{};process.exit(s['test:unit']?0:1)"; then
+      "$manager" run test:unit
+    fi
+
     echo "::endgroup::"
   )
 }
