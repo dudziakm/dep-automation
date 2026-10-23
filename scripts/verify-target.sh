@@ -76,7 +76,7 @@ node_project_dirs() {
     dir="$(dirname "$package")"
     # A root install handles ordinary npm workspaces. Verify a nested project
     # separately only when it owns a lockfile of its own.
-    if [[ "$dir" != "." && -f package.json ]] &&
+    if [[ "$dir" != "." && -f "$dir/package.json" ]] &&
        [[ ! -f "$dir/package-lock.json" && ! -f "$dir/pnpm-lock.yaml" && ! -f "$dir/yarn.lock" ]]; then
       continue
     fi
