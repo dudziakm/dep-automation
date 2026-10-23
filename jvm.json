@@ -17,8 +17,7 @@
         "io.rest-assured{/,}**"
       ],
       "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "test libraries",
-      "minimumReleaseAge": "5 days"
+      "groupName": "test libraries"
     },
     {
       "description": "Maven build plugins as a separate group.",
@@ -52,8 +51,7 @@
       "description": "The Spring Boot parent and BOM move as a single whole — only then is the build a real gate.",
       "matchPackageNames": ["org.springframework.boot{/,}**"],
       "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "spring-boot",
-      "minimumReleaseAge": "5 days"
+      "groupName": "spring-boot"
     }
   ]
 }
