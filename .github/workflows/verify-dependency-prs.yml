@@ -241,7 +241,8 @@ jobs:
               --jq '(.body | contains("🚦 **Automerge**: Enabled."))
                     or ((.headRefName | startswith("renovate/"))
                         and ([.labels[].name] | index("security") != null)
-                        and (.title | test(" to v[0-9]+\\.[0-9]+")))'
+                        and (.title | test(" to v[0-9]+\\.[0-9]+"))
+                        and (.title | test(" to v[0-9]+(\\.0)+[0-9.]*\\s") | not))'
           )"
           if [[ "$automerge" != true ]]; then
             echo "Renovate marked this update for manual merge."
@@ -249,7 +250,10 @@ jobs:
           fi
 
           if [[ "$(gh api "repos/$repo" --jq .allow_auto_merge)" == true ]]; then
-            gh pr merge "$pr" --repo "$repo" --squash --auto
+            # --auto only registers intent, but still refuse to schedule a merge
+            # for a head this job did not verify.
+            gh pr merge "$pr" --repo "$repo" --squash --auto \
+              --match-head-commit "$expected_sha"
           else
             for _ in $(seq 20); do
               state="$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus --jq .mergeStateStatus)"
