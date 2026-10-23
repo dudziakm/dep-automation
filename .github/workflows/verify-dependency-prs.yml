@@ -199,6 +199,9 @@ jobs:
       - name: Publish verification result
         # A skipped verify means the runner was not fit to run it; leaving the
         # status pending lets discover retry the revision once it goes stale.
+        # A cancelled job (timeout included) is infrastructure, not bad code:
+        # it gets the same pending status with a timeout note, so discover
+        # retries instead of Renovate treating the PR as broken.
         if: always() && steps.verify.outcome != 'skipped'
         env:
           GH_TOKEN: ${{ secrets.VERIFY_TOKEN }}
@@ -207,6 +210,9 @@ jobs:
           if [[ "$VERIFY_OUTCOME" == success ]]; then
             state=success
             description='Mac dependency verification passed'
+          elif [[ "$VERIFY_OUTCOME" == cancelled ]]; then
+            state=pending
+            description='Mac dependency verification timed out or was cancelled; will retry'
           else
             state=failure
             description='Mac dependency verification failed'
