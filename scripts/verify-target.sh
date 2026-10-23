@@ -10,6 +10,10 @@ install_node_project() {
     cd "$dir"
     echo "::group::Install Node project: ${dir}"
 
+    # Pin npm to 10.8.3: 10.9.2 strips `libc` from optional dependencies when
+    # running `install --package-lock-only`, which breaks `npm ci` on Linux.
+    npm install -g npm@10.8.3
+
     if [[ -f pnpm-lock.yaml ]]; then
       corepack enable
       pnpm install --frozen-lockfile --ignore-scripts
