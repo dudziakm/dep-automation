@@ -257,7 +257,12 @@ jobs:
               sleep 30
             done
             if [[ "$state" == CLEAN ]]; then
-              gh pr merge "$pr" --repo "$repo" --squash --delete-branch
+              # The CLEAN check can be minutes old and tells us nothing about
+              # the head commit. Refuse to merge anything but the exact
+              # revision this job verified - a Renovate rebase during the wait
+              # would otherwise merge an unverified commit.
+              gh pr merge "$pr" --repo "$repo" --squash --delete-branch \
+                --match-head-commit "$expected_sha"
             else
               echo "Repository has auto-merge disabled and the PR is $state; leaving it for the next run."
             fi
