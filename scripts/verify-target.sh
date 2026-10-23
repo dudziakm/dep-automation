@@ -4,6 +4,18 @@ set -euo pipefail
 root="${1:?usage: verify-target.sh <repository-root>}"
 cd "$root"
 
+# A persistent runner keeps whatever a verify leaves behind. The Python venv
+# below is ours alone, so always remove it. node_modules is removed only when
+# the checkout did not have one already - never destroy a pre-existing tree.
+had_node_modules=0
+[[ -d node_modules ]] && had_node_modules=1
+cleanup() {
+  rm -rf .verify-venv
+  [[ "$had_node_modules" == 0 ]] && rm -rf node_modules
+  return 0
+}
+trap cleanup EXIT
+
 install_node_project() {
   local dir="$1"
   (
