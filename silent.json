@@ -6,5 +6,11 @@
 
   "dependencyDashboard": true,
   "dependencyDashboardReportAbandonment": true,
-  "dependencyDashboardApproval": true
+  "dependencyDashboardApproval": true,
+
+  "automerge": false,
+  "platformAutomerge": false,
+  "lockFileMaintenance": {
+    "enabled": false
+  }
 }
