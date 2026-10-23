@@ -18,6 +18,14 @@
       "automergeType": "pr"
     },
     {
+      "description": "A runtime security fix skips the release-age quarantine (vulnerabilityAlerts sets minimumReleaseAge:null), so it is the prime supply-chain target: a malicious 'security patch' could land on main within the hour on a green install+build. Runtime vulnerability fixes therefore always wait for a human on the dashboard. Dev-dependency security fixes are unaffected and still automerge as patch/minor.",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchJsonata": ["isVulnerabilityAlert = true"],
+      "automerge": false,
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "GitHub Actions are pinned to a digest by config:recommended, so the diff is a hash and the workflow itself is the test.",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["digest", "patch", "minor"],
